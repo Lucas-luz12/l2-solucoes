@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   description:
     "L² Soluções — tecnologia, processos e resultados. Software e sistemas web sob medida.",
   icons: {
-    icon: "/logo.png",
+    icon: "/logo-mark.png",
   },
 };
 

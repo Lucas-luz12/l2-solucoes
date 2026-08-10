@@ -1,4 +1,30 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+
+const CONTACT_EMAIL = "contato@l2solucoes.com.br";
+
 export function Contact() {
+  const [sending, setSending] = useState(false);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const nome = String(data.get("nome") ?? "").trim();
+    const email = String(data.get("email") ?? "").trim();
+    const mensagem = String(data.get("mensagem") ?? "").trim();
+
+    const subject = encodeURIComponent(`Contato pelo site — ${nome}`);
+    const body = encodeURIComponent(
+      `Nome: ${nome}\nE-mail: ${email}\n\nMensagem:\n${mensagem}`,
+    );
+
+    setSending(true);
+    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+    window.setTimeout(() => setSending(false), 1500);
+  }
+
   return (
     <section id="contato" className="bg-surface py-24 md:py-32">
       <div className="mx-auto max-w-6xl px-6 md:px-8">
@@ -14,14 +40,18 @@ export function Contact() {
               Conte o desafio em poucas linhas. Respondemos com uma leitura
               honesta do que faz sentido construir.
             </p>
+            <p className="mt-6 text-sm text-muted">
+              E-mail:{" "}
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="font-medium text-accent transition-colors hover:text-accent-bright"
+              >
+                {CONTACT_EMAIL}
+              </a>
+            </p>
           </div>
 
-          <form
-            className="space-y-5"
-            action="mailto:contato@l2solucoes.com.br"
-            method="post"
-            encType="text/plain"
-          >
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="nome" className="mb-2 block text-sm font-medium text-ink-soft">
                 Nome
@@ -62,9 +92,10 @@ export function Contact() {
             </div>
             <button
               type="submit"
-              className="w-full rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-bright sm:w-auto"
+              disabled={sending}
+              className="w-full rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-bright disabled:opacity-70 sm:w-auto"
             >
-              Enviar mensagem
+              {sending ? "Abrindo e-mail…" : "Enviar mensagem"}
             </button>
           </form>
         </div>
