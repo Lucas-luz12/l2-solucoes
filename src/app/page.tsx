@@ -5,7 +5,14 @@ import { Approach } from "@/components/Approach";
 import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
 
-export default function Home() {
+type HomeProps = {
+  searchParams?: Promise<{ contato?: string }>;
+};
+
+export default async function Home({ searchParams }: HomeProps) {
+  const params = searchParams ? await searchParams : {};
+  const sent = params.contato === "enviado";
+
   return (
     <>
       <Header />
@@ -13,7 +20,7 @@ export default function Home() {
         <Hero />
         <Services />
         <Approach />
-        <Contact />
+        <Contact sent={sent} />
       </main>
       <Footer />
     </>
