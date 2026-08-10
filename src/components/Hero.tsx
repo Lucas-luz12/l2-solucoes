@@ -31,8 +31,10 @@ export function Hero() {
         <h1 className="animate-rise-delay-1 font-display text-3xl font-semibold leading-[1.15] tracking-tight text-ink sm:text-4xl md:text-5xl">
           Software e sistemas web sob medida
         </h1>
-        <p className="animate-rise-delay-2 mt-5 max-w-lg text-lg leading-relaxed text-muted">
-          Da ideia ao sistema em produção — com clareza, processo e resultado.
+        <p className="animate-rise-delay-2 mt-5 flex max-w-2xl items-center justify-center gap-3 text-sm font-medium uppercase tracking-[0.18em] text-accent sm:text-base">
+          <span className="hidden h-px w-8 bg-accent/50 sm:block" aria-hidden />
+          Tecnologia que conecta. Soluções que transformam.
+          <span className="hidden h-px w-8 bg-accent/50 sm:block" aria-hidden />
         </p>
         <div className="animate-rise-delay-3 mt-10 flex flex-wrap items-center justify-center gap-4">
           <a
