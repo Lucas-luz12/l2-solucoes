@@ -9,11 +9,6 @@ const services = [
     description:
       "Produtos digitais feitos sob medida — do fluxo de negócio à experiência do usuário.",
   },
-  {
-    title: "Integrações & APIs",
-    description:
-      "Conectamos sistemas, dados e serviços para eliminar atrito e ganhar escala.",
-  },
 ];
 
 export function Services() {
@@ -33,7 +28,7 @@ export function Services() {
           </p>
         </div>
 
-        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-3">
+        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-2">
           {services.map((service, index) => (
             <li key={service.title} className="group">
               <span className="font-display text-sm font-semibold text-accent">
