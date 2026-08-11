@@ -29,12 +29,9 @@ export function Services() {
         </div>
 
         <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-2">
-          {services.map((service, index) => (
+          {services.map((service) => (
             <li key={service.title} className="group">
-              <span className="font-display text-sm font-semibold text-accent">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <h3 className="mt-3 font-display text-xl font-semibold text-ink">
+              <h3 className="font-display text-xl font-semibold text-ink">
                 {service.title}
               </h3>
               <p className="mt-3 leading-relaxed text-muted">{service.description}</p>
