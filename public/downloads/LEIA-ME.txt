@@ -1,0 +1,10 @@
+# Pasta de downloads — L² Soluções
+#
+# Coloque aqui os instaladores das demos Windows (.exe, .msi ou .zip).
+# Exemplo:
+#   public/downloads/l2-demo-gestao-setup-0.1.0.exe
+#
+# Depois, em src/components/Downloads.tsx, atualize o campo `file`:
+#   file: "/downloads/l2-demo-gestao-setup-0.1.0.exe"
+#
+# Faça commit + push e reimplante na Hostinger.
