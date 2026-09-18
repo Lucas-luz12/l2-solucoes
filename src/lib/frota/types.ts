@@ -50,6 +50,9 @@ export type Device = {
   model: string;
   platform: string;
   operator: string;
+  destination: string;
+  checkedOutAt: string | null;
+  expectedReturnAt: string | null;
   area: DeviceArea;
   policyId: string;
   locked: boolean;
@@ -65,6 +68,12 @@ export type Device = {
   pendingCommands: DeviceCommand[];
 };
 
+export type FrotaSettings = {
+  companyName: string;
+  centralPhone: string;
+  lostMessage: string;
+};
+
 export type AuditEvent = {
   id: string;
   at: string;
@@ -74,6 +83,7 @@ export type AuditEvent = {
 };
 
 export type FrotaStore = {
+  settings: FrotaSettings;
   devices: Device[];
   policies: Policy[];
   events: AuditEvent[];
@@ -88,10 +98,15 @@ export type AgentSnapshot = {
   deviceId: string;
   name: string;
   operator: string;
+  destination: string;
+  checkedOutAt: string | null;
+  expectedReturnAt: string | null;
   area: DeviceArea;
   locked: boolean;
   lockMessage: string;
   policy: Policy;
   apps: CatalogApp[];
   commands: DeviceCommand[];
+  companyName: string;
+  centralPhone: string;
 };

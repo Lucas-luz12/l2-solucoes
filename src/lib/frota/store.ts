@@ -7,6 +7,7 @@ import type {
   CommandType,
   Device,
   DeviceArea,
+  FrotaSettings,
   FrotaStore,
   GeoPoint,
   Policy,
@@ -17,6 +18,11 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "frota.json");
 const ONLINE_MS = 90_000;
 const HISTORY_LIMIT = 40;
+const DEFAULT_SETTINGS: FrotaSettings = {
+  companyName: "L² Soluções",
+  centralPhone: "",
+  lostMessage: "Aparelho bloqueado pela central. Entregue na operação.",
+};
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -56,6 +62,9 @@ function seedStore(): FrotaStore {
       model: "Samsung Galaxy A15",
       platform: "Android",
       operator: "Carlos Mendes",
+      destination: "Rota zona central",
+      checkedOutAt: hoursAgo(8),
+      expectedReturnAt: hoursAgo(-10),
       area: "operacao",
       policyId: opPolicy.id,
       locked: false,
@@ -83,6 +92,9 @@ function seedStore(): FrotaStore {
       model: "Motorola G54",
       platform: "Android",
       operator: "Fernanda Alves",
+      destination: "Busca após perda de contato",
+      checkedOutAt: hoursAgo(12),
+      expectedReturnAt: hoursAgo(-6),
       area: "operacao",
       policyId: opPolicy.id,
       locked: true,
@@ -109,6 +121,9 @@ function seedStore(): FrotaStore {
       model: "Redmi Note 13",
       platform: "Android",
       operator: "João Ribeiro",
+      destination: "Osasco — obra",
+      checkedOutAt: hoursAgo(6),
+      expectedReturnAt: hoursAgo(-8),
       area: "operacao",
       policyId: opPolicy.id,
       locked: false,
@@ -132,6 +147,9 @@ function seedStore(): FrotaStore {
       model: "iPhone 12",
       platform: "iOS",
       operator: "Recepção",
+      destination: "",
+      checkedOutAt: null,
+      expectedReturnAt: null,
       area: "escritorio",
       policyId: officePolicy.id,
       locked: false,
@@ -155,6 +173,9 @@ function seedStore(): FrotaStore {
       model: "",
       platform: "",
       operator: "A definir",
+      destination: "",
+      checkedOutAt: null,
+      expectedReturnAt: null,
       area: "reserva",
       policyId: freePolicy.id,
       locked: false,
@@ -172,6 +193,7 @@ function seedStore(): FrotaStore {
   ];
 
   return {
+    settings: { ...DEFAULT_SETTINGS },
     devices,
     policies: DEFAULT_POLICIES.map((policy) => ({ ...policy })),
     events: [
@@ -193,6 +215,29 @@ function seedStore(): FrotaStore {
   };
 }
 
+function migrateDevice(device: Device): Device {
+  return {
+    ...device,
+    destination: device.destination ?? "",
+    checkedOutAt: device.checkedOutAt ?? (device.area === "operacao" ? device.createdAt : null),
+    expectedReturnAt: device.expectedReturnAt ?? null,
+    pendingCommands: device.pendingCommands ?? [],
+  };
+}
+
+function migrateStore(store: FrotaStore): FrotaStore {
+  return {
+    settings: {
+      companyName: store.settings?.companyName || DEFAULT_SETTINGS.companyName,
+      centralPhone: store.settings?.centralPhone || "",
+      lostMessage: store.settings?.lostMessage || DEFAULT_SETTINGS.lostMessage,
+    },
+    devices: (store.devices || []).map(migrateDevice),
+    policies: store.policies?.length ? store.policies : DEFAULT_POLICIES.map((policy) => ({ ...policy })),
+    events: store.events || [],
+  };
+}
+
 async function readStore(): Promise<FrotaStore> {
   try {
     const raw = await readFile(DATA_FILE, "utf8");
@@ -200,7 +245,7 @@ async function readStore(): Promise<FrotaStore> {
     if (!Array.isArray(parsed.devices) || !Array.isArray(parsed.policies)) {
       return seedStore();
     }
-    return parsed;
+    return migrateStore(parsed);
   } catch {
     const seeded = seedStore();
     await persist(seeded);
@@ -259,6 +304,7 @@ export async function getSnapshot() {
   return withLock(async () => {
     const store = await readStore();
     return {
+      settings: store.settings,
       devices: store.devices.map(toPublicDevice),
       policies: store.policies,
       events: store.events.slice(0, 80),
@@ -288,6 +334,9 @@ export async function createDevice(input: {
       model: "",
       platform: "",
       operator: input.operator.trim() || "A definir",
+      destination: "",
+      checkedOutAt: null,
+      expectedReturnAt: null,
       area: input.area,
       policyId: store.policies.some((p) => p.id === input.policyId)
         ? input.policyId
@@ -316,7 +365,15 @@ export async function updateDevice(
   patch: Partial<
     Pick<
       Device,
-      "name" | "operator" | "area" | "policyId" | "notes" | "lockMessage" | "locked"
+      | "name"
+      | "operator"
+      | "destination"
+      | "expectedReturnAt"
+      | "area"
+      | "policyId"
+      | "notes"
+      | "lockMessage"
+      | "locked"
     >
   >,
 ) {
@@ -326,6 +383,8 @@ export async function updateDevice(
     if (!device) throw new Error("Aparelho não encontrado.");
     if (patch.name?.trim()) device.name = patch.name.trim();
     if (patch.operator !== undefined) device.operator = patch.operator.trim();
+    if (patch.destination !== undefined) device.destination = patch.destination.trim();
+    if (patch.expectedReturnAt !== undefined) device.expectedReturnAt = patch.expectedReturnAt;
     if (patch.area) device.area = patch.area;
     if (patch.policyId && store.policies.some((p) => p.id === patch.policyId)) {
       device.policyId = patch.policyId;
@@ -350,6 +409,110 @@ export async function deleteDevice(id: string) {
   });
 }
 
+function enqueueCommand(device: Device, type: CommandType, message?: string) {
+  if (type === "lock") {
+    device.locked = true;
+    if (message?.trim()) device.lockMessage = message.trim();
+  }
+  if (type === "unlock") {
+    device.locked = false;
+  }
+  device.pendingCommands.push({
+    id: newId(),
+    type,
+    payload: message?.trim() ? { message: message.trim() } : undefined,
+    createdAt: nowIso(),
+  });
+}
+
+export async function checkoutDevice(
+  id: string,
+  input: { operator: string; destination: string; expectedReturnAt?: string | null },
+) {
+  return withLock(async () => {
+    const store = await readStore();
+    const device = store.devices.find((item) => item.id === id);
+    if (!device) throw new Error("Aparelho não encontrado.");
+    const operator = input.operator.trim();
+    if (!operator) throw new Error("Informe quem vai levar o aparelho.");
+    device.operator = operator;
+    device.destination = input.destination.trim();
+    device.expectedReturnAt = input.expectedReturnAt || null;
+    device.checkedOutAt = nowIso();
+    device.area = "operacao";
+    device.policyId = store.policies.some((policy) => policy.id === "politica-operacao")
+      ? "politica-operacao"
+      : store.policies[0].id;
+    device.locked = false;
+    pushEvent(
+      store,
+      "checkout",
+      `${device.name} saiu para operação com ${device.operator}${
+        device.destination ? ` · ${device.destination}` : ""
+      }.`,
+      device.id,
+    );
+    await persist(store);
+    return toPublicDevice(device);
+  });
+}
+
+export async function checkinDevice(id: string) {
+  return withLock(async () => {
+    const store = await readStore();
+    const device = store.devices.find((item) => item.id === id);
+    if (!device) throw new Error("Aparelho não encontrado.");
+    const who = device.operator;
+    device.area = "reserva";
+    device.policyId = store.policies.some((policy) => policy.id === "politica-escritorio")
+      ? "politica-escritorio"
+      : store.policies[0].id;
+    device.destination = "";
+    device.checkedOutAt = null;
+    device.expectedReturnAt = null;
+    device.locked = false;
+    enqueueCommand(device, "unlock");
+    pushEvent(store, "checkin", `${device.name} retornou da operação (estava com ${who}).`, device.id);
+    await persist(store);
+    return toPublicDevice(device);
+  });
+}
+
+export async function markLost(id: string) {
+  return withLock(async () => {
+    const store = await readStore();
+    const device = store.devices.find((item) => item.id === id);
+    if (!device) throw new Error("Aparelho não encontrado.");
+    enqueueCommand(device, "lock", store.settings.lostMessage);
+    enqueueCommand(device, "ring");
+    enqueueCommand(device, "locate");
+    pushEvent(
+      store,
+      "lost",
+      `${device.name} marcado como sumiço: bloqueio, toque e pedido de GPS.`,
+      device.id,
+    );
+    await persist(store);
+    return toPublicDevice(device);
+  });
+}
+
+export async function saveSettings(patch: Partial<FrotaSettings>) {
+  return withLock(async () => {
+    const store = await readStore();
+    if (patch.companyName !== undefined) {
+      store.settings.companyName = patch.companyName.trim() || DEFAULT_SETTINGS.companyName;
+    }
+    if (patch.centralPhone !== undefined) store.settings.centralPhone = patch.centralPhone.trim();
+    if (patch.lostMessage !== undefined) {
+      store.settings.lostMessage = patch.lostMessage.trim() || DEFAULT_SETTINGS.lostMessage;
+    }
+    pushEvent(store, "settings", "Configuração da central atualizada.");
+    await persist(store);
+    return store.settings;
+  });
+}
+
 export async function issueCommand(
   id: string,
   type: CommandType,
@@ -360,21 +523,7 @@ export async function issueCommand(
     const device = store.devices.find((item) => item.id === id);
     if (!device) throw new Error("Aparelho não encontrado.");
 
-    if (type === "lock") {
-      device.locked = true;
-      if (message?.trim()) device.lockMessage = message.trim();
-    }
-    if (type === "unlock") {
-      device.locked = false;
-    }
-
-    const command = {
-      id: newId(),
-      type,
-      payload: message?.trim() ? { message: message.trim() } : undefined,
-      createdAt: nowIso(),
-    };
-    device.pendingCommands.push(command);
+    enqueueCommand(device, type, message);
     const labels: Record<CommandType, string> = {
       lock: "bloqueado",
       unlock: "desbloqueado",
@@ -496,12 +645,17 @@ function agentSnapshot(store: FrotaStore, device: Device): AgentSnapshot {
     deviceId: device.id,
     name: device.name,
     operator: device.operator,
+    destination: device.destination,
+    checkedOutAt: device.checkedOutAt,
+    expectedReturnAt: device.expectedReturnAt,
     area: device.area,
     locked: device.locked,
     lockMessage: device.lockMessage,
     policy,
     apps: appsForPolicy(policy),
     commands: device.pendingCommands.filter((cmd) => !cmd.ackedAt),
+    companyName: store.settings.companyName,
+    centralPhone: store.settings.centralPhone,
   };
 }
 
@@ -510,6 +664,7 @@ export async function resetDemoData() {
     const seeded = seedStore();
     await persist(seeded);
     return {
+      settings: seeded.settings,
       devices: seeded.devices.map(toPublicDevice),
       policies: seeded.policies,
       events: seeded.events,

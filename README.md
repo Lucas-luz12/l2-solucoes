@@ -34,6 +34,8 @@ FROTA_SECRET=uma-chave-longa
 
 Os dados da frota ficam em `data/frota.json` (precisa de escrita no Node da Hostinger).
 
+Rotina: o celular entra como **reserva**. Na saída, use **Mandar para a operação** (quem leva + rota) — isso aplica a política de campo. Se sumir, **Aparelho sumiu** bloqueia, toca e pede GPS. No retorno, registre a entrada.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

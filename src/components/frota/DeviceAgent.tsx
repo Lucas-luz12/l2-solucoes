@@ -273,9 +273,20 @@ export function DeviceAgent({ initialCode = "" }: { initialCode?: string }) {
       </header>
 
       <div className="px-5 pt-6">
-        <p className="text-xs uppercase tracking-[0.18em] text-accent-bright">{snapshot.policy.name}</p>
-        <h1 className="mt-1 font-display text-2xl font-semibold">{snapshot.operator || snapshot.name}</h1>
-        <p className="mt-1 text-sm text-white/55">Somente aplicativos liberados para a operação.</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-accent-bright">
+          {snapshot.area === "operacao" ? "Modo operação" : snapshot.policy.name}
+        </p>
+        <h1 className="mt-1 font-display text-2xl font-semibold">
+          {snapshot.operator && snapshot.operator !== "A definir" ? snapshot.operator : snapshot.name}
+        </h1>
+        {snapshot.destination ? (
+          <p className="mt-1 text-sm text-white/70">{snapshot.destination}</p>
+        ) : null}
+        <p className="mt-1 text-sm text-white/55">
+          {snapshot.area === "operacao"
+            ? "Só o essencial. Redes sociais bloqueadas pela central."
+            : "Aplicativos liberados neste aparelho."}
+        </p>
       </div>
 
       {geoError ? (
@@ -346,22 +357,34 @@ export function DeviceAgent({ initialCode = "" }: { initialCode?: string }) {
           <p className="mt-6 text-sm text-white/50">
             {snapshot.name} · {snapshot.operator}
           </p>
+          {snapshot.centralPhone ? (
+            <a
+              href={`tel:${snapshot.centralPhone.replace(/\s/g, "")}`}
+              className="mt-8 rounded-md bg-white px-5 py-3 text-sm font-semibold text-ink"
+            >
+              Ligar para a central
+            </a>
+          ) : null}
           <p className="mt-10 text-xs text-white/35">Somente a central pode desbloquear.</p>
         </div>
       ) : null}
 
       <footer className="mt-auto flex items-center justify-between px-5 py-5 text-[11px] text-white/35">
-        <span>Sincronizado com L²</span>
-        <button
-          type="button"
-          onClick={() => {
-            clearToken();
-            setSessionToken(null);
-            setSnapshot(null);
-          }}
-        >
-          Desparear
-        </button>
+        <span>{snapshot.companyName || "Sincronizado com L²"}</span>
+        {snapshot.area === "operacao" ? (
+          <span>Modo campo</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              clearToken();
+              setSessionToken(null);
+              setSnapshot(null);
+            }}
+          >
+            Desparear
+          </button>
+        )}
       </footer>
     </PhoneShell>
   );

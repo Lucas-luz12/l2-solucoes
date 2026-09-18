@@ -3,23 +3,20 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
-import { FleetMap, OsmLink } from "@/components/frota/FleetMap";
-import type { CatalogApp, Policy, PublicDevice, AuditEvent } from "@/lib/frota/types";
+import { FleetMap } from "@/components/frota/FleetMap";
+import { AREA_LABEL, DevicePanel, attentionReason, formatWhen, statusOf } from "@/components/frota/DevicePanel";
+import type { CatalogApp, FrotaSettings, Policy, PublicDevice, AuditEvent } from "@/lib/frota/types";
 
 type Snapshot = {
+  settings: FrotaSettings;
   devices: PublicDevice[];
   policies: Policy[];
   events: AuditEvent[];
   catalog: CatalogApp[];
 };
 
-type Tab = "visao" | "aparelhos" | "mapa" | "politicas";
-
-const AREA_LABEL: Record<PublicDevice["area"], string> = {
-  operacao: "Operação",
-  escritorio: "Escritório",
-  reserva: "Reserva",
-};
+type Tab = "visao" | "aparelhos" | "mapa" | "politicas" | "central";
+type Filter = "todos" | "campo" | "reserva" | "atencao";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -32,19 +29,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const data = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(data.error || "Falha na requisição.");
   return data;
-}
-
-function statusOf(device: PublicDevice) {
-  if (!device.enrolled) return { label: "Aguardando pareamento", className: "bg-amber-100 text-amber-800" };
-  if (device.locked) return { label: "Bloqueado", className: "bg-red-100 text-red-800" };
-  if (device.online) return { label: "Online", className: "bg-emerald-100 text-emerald-800" };
-  return { label: "Offline", className: "bg-slate-100 text-slate-600" };
-}
-
-function formatWhen(iso: string | null) {
-  if (!iso) return "nunca";
-  const date = new Date(iso);
-  return date.toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 }
 
 export function Dashboard() {
@@ -61,14 +45,17 @@ export function Dashboard() {
   const [draft, setDraft] = useState({
     name: "",
     operator: "",
-    area: "operacao" as PublicDevice["area"],
-    policyId: "politica-operacao",
+    area: "reserva" as PublicDevice["area"],
+    policyId: "politica-escritorio",
   });
   const [policyDraft, setPolicyDraft] = useState<Policy | null>(null);
+  const [filter, setFilter] = useState<Filter>("todos");
+  const [settingsDraft, setSettingsDraft] = useState<FrotaSettings | null>(null);
 
   const refresh = useCallback(async () => {
     const snapshot = await api<Snapshot>("/api/frota/devices");
     setData(snapshot);
+    setSettingsDraft((current) => current || snapshot.settings);
     setSelectedId((current) => current || snapshot.devices[0]?.id || null);
   }, []);
 
@@ -205,9 +192,14 @@ export function Dashboard() {
 
   const devices = data?.devices || [];
   const online = devices.filter((d) => d.online && !d.locked).length;
-  const locked = devices.filter((d) => d.locked).length;
   const field = devices.filter((d) => d.area === "operacao").length;
-  const policyById = Object.fromEntries((data?.policies || []).map((p) => [p.id, p]));
+  const alerts = devices.filter((d) => attentionReason(d));
+  const visible = devices.filter((device) => {
+    if (filter === "campo") return device.area === "operacao";
+    if (filter === "reserva") return device.area !== "operacao";
+    if (filter === "atencao") return Boolean(attentionReason(device));
+    return true;
+  });
 
   return (
     <div className="min-h-svh bg-surface">
@@ -222,6 +214,7 @@ export function Dashboard() {
                 ["aparelhos", "Aparelhos"],
                 ["mapa", "Mapa"],
                 ["politicas", "Políticas"],
+                ["central", "Central"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -265,9 +258,31 @@ export function Dashboard() {
               {tab === "visao" ? (
                 <div className="mb-6 grid grid-cols-2 gap-3">
                   <Kpi label="Aparelhos" value={devices.length} />
-                  <Kpi label="Em operação" value={field} />
+                  <Kpi label="Em campo" value={field} />
                   <Kpi label="Online" value={online} />
-                  <Kpi label="Bloqueados" value={locked} accent={locked > 0} />
+                  <Kpi label="Atenção" value={alerts.length} accent={alerts.length > 0} />
+                </div>
+              ) : null}
+
+              {tab === "visao" && alerts.length > 0 ? (
+                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+                  <p className="font-medium text-amber-900">Precisa da central</p>
+                  <ul className="mt-2 space-y-1 text-amber-800">
+                    {alerts.slice(0, 4).map((device) => (
+                      <li key={device.id}>
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => {
+                            setSelectedId(device.id);
+                            setTab("aparelhos");
+                          }}
+                        >
+                          {device.name}: {attentionReason(device)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
 
@@ -282,6 +297,28 @@ export function Dashboard() {
                 </button>
               </div>
 
+              <div className="mb-3 flex flex-wrap gap-1">
+                {(
+                  [
+                    ["todos", "Todos"],
+                    ["campo", "Em campo"],
+                    ["reserva", "Na empresa"],
+                    ["atencao", "Atenção"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setFilter(id)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      filter === id ? "bg-ink text-white" : "bg-surface text-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               {creating ? (
                 <form
                   className="mb-4 space-y-3 rounded-md border border-line bg-surface-elevated p-4"
@@ -294,7 +331,7 @@ export function Dashboard() {
                       });
                       setSelectedId(result.device.id);
                       setCreating(false);
-                      setDraft({ name: "", operator: "", area: "operacao", policyId: "politica-operacao" });
+                      setDraft({ name: "", operator: "", area: "reserva", policyId: "politica-escritorio" });
                     });
                   }}
                 >
@@ -308,29 +345,12 @@ export function Dashboard() {
                   <input
                     value={draft.operator}
                     onChange={(e) => setDraft({ ...draft, operator: e.target.value })}
-                    placeholder="Operador"
+                    placeholder="Responsável no estoque (opcional)"
                     className="w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
                   />
-                  <select
-                    value={draft.area}
-                    onChange={(e) => setDraft({ ...draft, area: e.target.value as PublicDevice["area"] })}
-                    className="w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
-                  >
-                    <option value="operacao">Operação</option>
-                    <option value="escritorio">Escritório</option>
-                    <option value="reserva">Reserva</option>
-                  </select>
-                  <select
-                    value={draft.policyId}
-                    onChange={(e) => setDraft({ ...draft, policyId: e.target.value })}
-                    className="w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
-                  >
-                    {(data?.policies || []).map((policy) => (
-                      <option key={policy.id} value={policy.id}>
-                        {policy.name}
-                      </option>
-                    ))}
-                  </select>
+                  <p className="text-xs text-muted">
+                    Entra como reserva. A política de campo só vale quando alguém levar o aparelho.
+                  </p>
                   <button
                     type="submit"
                     disabled={busy === "create"}
@@ -342,7 +362,7 @@ export function Dashboard() {
               ) : null}
 
               <ul className="divide-y divide-line overflow-hidden rounded-md border border-line bg-surface-elevated">
-                {devices.map((device) => {
+                {visible.map((device) => {
                   const status = statusOf(device);
                   return (
                     <li key={device.id}>
@@ -359,7 +379,8 @@ export function Dashboard() {
                         <span>
                           <span className="block font-display font-semibold text-ink">{device.name}</span>
                           <span className="text-sm text-muted">
-                            {device.operator} · {AREA_LABEL[device.area]}
+                            {device.operator}
+                            {device.destination ? ` · ${device.destination}` : ` · ${AREA_LABEL[device.area]}`}
                           </span>
                         </span>
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.className}`}>
@@ -393,6 +414,14 @@ export function Dashboard() {
                     run("delete", async () => {
                       await api(`/api/frota/devices/${selected.id}`, { method: "DELETE" });
                       setSelectedId(null);
+                    })
+                  }
+                  onLifecycle={(action, payload) =>
+                    run(action, async () => {
+                      await api(`/api/frota/devices/${selected.id}/lifecycle`, {
+                        method: "POST",
+                        body: JSON.stringify({ action, ...payload }),
+                      });
                     })
                   }
                 />
@@ -538,30 +567,91 @@ export function Dashboard() {
           </section>
         ) : null}
 
+        {tab === "central" && settingsDraft ? (
+          <section className="mx-auto max-w-xl rounded-md border border-line bg-surface-elevated p-6">
+            <h2 className="font-display text-2xl font-semibold text-ink">A central</h2>
+            <p className="mt-2 text-sm text-muted">
+              Nome e telefone aparecem no aparelho. A mensagem é a que o operador vê se o celular for bloqueado.
+            </p>
+            <form
+              className="mt-6 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                run("settings", async () => {
+                  const result = await api<{ settings: FrotaSettings }>("/api/frota/settings", {
+                    method: "POST",
+                    body: JSON.stringify(settingsDraft),
+                  });
+                  setSettingsDraft(result.settings);
+                });
+              }}
+            >
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Empresa</span>
+                <input
+                  value={settingsDraft.companyName}
+                  onChange={(event) => setSettingsDraft({ ...settingsDraft, companyName: event.target.value })}
+                  className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Telefone da central</span>
+                <input
+                  value={settingsDraft.centralPhone}
+                  onChange={(event) => setSettingsDraft({ ...settingsDraft, centralPhone: event.target.value })}
+                  placeholder="11 90000-0000"
+                  className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Mensagem de bloqueio / sumiço</span>
+                <textarea
+                  value={settingsDraft.lostMessage}
+                  onChange={(event) => setSettingsDraft({ ...settingsDraft, lostMessage: event.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={busy === "settings"}
+                className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-bright"
+              >
+                Salvar central
+              </button>
+            </form>
+          </section>
+        ) : null}
+
         {tab === "visao" ? (
           <section className="mt-8 rounded-md border border-line bg-surface-elevated p-5">
-            <h3 className="font-display text-lg font-semibold text-ink">Como implantar nos celulares</h3>
+            <h3 className="font-display text-lg font-semibold text-ink">Rotina do dia</h3>
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
-              <li>Cadastre o aparelho aqui e anote o código de 6 dígitos.</li>
+              <li>Cadastre o celular na reserva e pareie em /aparelho com o código.</li>
               <li>
-                No celular da empresa, abra <strong className="text-ink">/aparelho</strong>, adicione à tela inicial e
-                pareie com o código.
+                Na saída, use <strong className="text-ink">Mandar para a operação</strong>: quem leva, a rota e o retorno.
+                O aparelho entra em modo campo e perde redes sociais.
               </li>
-              <li>Autorize a localização. A central passa a ver GPS, bateria e status.</li>
+              <li>No mapa, acompanhe quem está em campo. Bateria baixa ou sem sinal aparece em Atenção.</li>
               <li>
-                Aplique a política <strong className="text-ink">{policyById["politica-operacao"]?.name || "Operação de campo"}</strong>{" "}
-                para esconder Instagram, TikTok, YouTube e o restante que não é da operação.
+                Se sumir: <strong className="text-ink">Aparelho sumiu</strong> bloqueia, toca e pede GPS de uma vez.
               </li>
-              <li>Se o aparelho sumir: Localizar, Tocar e Bloquear. O bloqueio cobre a tela até a central liberar.</li>
+              <li>No retorno, registre a entrada. O aparelho volta para a reserva, sem o modo campo.</li>
             </ol>
             <p className="mt-3 text-xs text-muted">
-              O app web controla a tela de operação e o bloqueio remoto. O bloqueio nativo do sistema Android/iOS (Device
-              Owner / MDM da Apple) pode ser acoplado depois, no mesmo painel.
+              Este app governa a tela da operação e o bloqueio remoto. O MDM nativo Android/iOS pode entrar depois, no
+              mesmo painel.
             </p>
             <button
               type="button"
               className="mt-4 text-sm text-muted underline hover:text-ink"
-              onClick={() => run("reset", async () => api("/api/frota/reset-demo", { method: "POST" }))}
+              onClick={() =>
+                run("reset", async () => {
+                  const snapshot = await api<Snapshot>("/api/frota/reset-demo", { method: "POST" });
+                  setData(snapshot);
+                  setSettingsDraft(snapshot.settings);
+                })
+              }
             >
               Restaurar frota de exemplo
             </button>
@@ -591,202 +681,6 @@ function Kpi({ label, value, accent = false }: { label: string; value: number; a
     <div className="rounded-md border border-line bg-surface-elevated px-4 py-3">
       <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
       <p className={`mt-1 font-display text-2xl font-semibold ${accent ? "text-red-600" : "text-ink"}`}>{value}</p>
-    </div>
-  );
-}
-
-function DevicePanel({
-  device,
-  policies,
-  catalog,
-  busy,
-  onCommand,
-  onSave,
-  onDelete,
-}: {
-  device: PublicDevice;
-  policies: Policy[];
-  catalog: CatalogApp[];
-  busy: string;
-  onCommand: (type: "lock" | "unlock" | "locate" | "ring", message?: string) => Promise<void>;
-  onSave: (patch: Partial<PublicDevice>) => Promise<void>;
-  onDelete: () => Promise<void>;
-}) {
-  const [operator, setOperator] = useState(device.operator);
-  const [policyId, setPolicyId] = useState(device.policyId);
-  const [area, setArea] = useState(device.area);
-  const [notes, setNotes] = useState(device.notes);
-  const policy = policies.find((item) => item.id === device.policyId);
-  const status = statusOf(device);
-  const enrollUrl = device.enrollmentCode
-    ? `/aparelho?codigo=${device.enrollmentCode}`
-    : "";
-  const allowed = new Set(policy?.allowedAppIds || []);
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-display text-2xl font-semibold text-ink">{device.name}</p>
-          <p className="text-sm text-muted">
-            {device.model || "Modelo ainda não informado"}
-            {device.platform ? ` · ${device.platform}` : ""}
-          </p>
-        </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}>{status.label}</span>
-      </div>
-
-      {device.enrollmentCode ? (
-        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-medium text-amber-900">Código de pareamento</p>
-          <p className="mt-1 font-display text-3xl tracking-[0.3em] text-ink">{device.enrollmentCode}</p>
-          {enrollUrl ? (
-            <Link href={enrollUrl} className="mt-2 block break-all text-xs text-amber-800">
-              {enrollUrl}
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-
-      <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
-        <Info label="Bateria" value={device.battery == null ? "—" : `${device.battery}%${device.charging ? " (carga)" : ""}`} />
-        <Info label="Último sinal" value={formatWhen(device.lastSeenAt)} />
-        <Info
-          label="GPS"
-          value={
-            device.location
-              ? `${device.location.lat.toFixed(5)}, ${device.location.lng.toFixed(5)}`
-              : "sem posição"
-          }
-        />
-      </dl>
-
-      {device.location ? (
-        <div className="mt-4">
-          <FleetMap devices={[device]} selectedId={device.id} height="h-48" />
-          <div className="mt-2">
-            <OsmLink lat={device.location.lat} lng={device.location.lng} />
-          </div>
-        </div>
-      ) : null}
-
-      <div className="mt-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          onClick={() => onCommand("lock")}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-        >
-          Bloquear
-        </button>
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          onClick={() => onCommand("unlock")}
-          className="rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink hover:border-accent disabled:opacity-50"
-        >
-          Desbloquear
-        </button>
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          onClick={() => onCommand("locate")}
-          className="rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink hover:border-accent disabled:opacity-50"
-        >
-          Localizar
-        </button>
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          onClick={() => onCommand("ring")}
-          className="rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink hover:border-accent disabled:opacity-50"
-        >
-          Tocar
-        </button>
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        <label className="text-sm">
-          <span className="mb-1 block text-muted">Operador</span>
-          <input
-            value={operator}
-            onChange={(e) => setOperator(e.target.value)}
-            className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
-          />
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-muted">Área</span>
-          <select
-            value={area}
-            onChange={(e) => setArea(e.target.value as PublicDevice["area"])}
-            className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
-          >
-            <option value="operacao">Operação</option>
-            <option value="escritorio">Escritório</option>
-            <option value="reserva">Reserva</option>
-          </select>
-        </label>
-        <label className="text-sm sm:col-span-2">
-          <span className="mb-1 block text-muted">Política de aplicativos</span>
-          <select
-            value={policyId}
-            onChange={(e) => setPolicyId(e.target.value)}
-            className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
-          >
-            {policies.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm sm:col-span-2">
-          <span className="mb-1 block text-muted">Notas</span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
-          />
-        </label>
-      </div>
-      <button
-        type="button"
-        disabled={busy === "save"}
-        onClick={() => onSave({ operator, policyId, area, notes })}
-        className="mt-4 rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white"
-      >
-        Salvar dados
-      </button>
-
-      <div className="mt-6">
-        <p className="text-sm font-medium text-ink-soft">Apps neste aparelho</p>
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {catalog.map((app) => (
-            <li
-              key={app.id}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                allowed.has(app.id) ? "bg-accent/15 text-accent" : "bg-slate-100 text-slate-400 line-through"
-              }`}
-            >
-              {app.name}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <button type="button" onClick={onDelete} className="mt-8 text-sm text-red-600 hover:underline">
-        Remover aparelho
-      </button>
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-surface px-3 py-2">
-      <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-0.5 font-medium text-ink">{value}</dd>
     </div>
   );
 }
