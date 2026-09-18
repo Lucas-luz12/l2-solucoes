@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { Wordmark } from "./Wordmark";
 
 const links = [
   { href: "#servicos", label: "Serviços" },
+  { href: "/frota", label: "Frota" },
   { href: "#downloads", label: "Downloads" },
   { href: "#abordagem", label: "Abordagem" },
   { href: "#contato", label: "Contato" },
@@ -19,15 +21,25 @@ export function Header() {
           <Wordmark size="sm" />
         </a>
         <nav className="hidden items-center gap-8 md:flex" aria-label="Principal">
-          {links.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-ink-soft/75 transition-colors hover:text-accent"
-            >
-              {link.label}
-            </a>
-          ))}
+          {links.map((link) =>
+            link.href.startsWith("/") ? (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium text-ink-soft/75 transition-colors hover:text-accent"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium text-ink-soft/75 transition-colors hover:text-accent"
+              >
+                {link.label}
+              </a>
+            ),
+          )}
         </nav>
         <a
           href="#contato"
