@@ -1,0 +1,686 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Wordmark } from "@/components/Wordmark";
+import { FleetMap } from "@/components/frota/FleetMap";
+import { AREA_LABEL, DevicePanel, attentionReason, formatWhen, statusOf } from "@/components/frota/DevicePanel";
+import type { CatalogApp, FrotaSettings, Policy, PublicDevice, AuditEvent } from "@/lib/frota/types";
+
+type Snapshot = {
+  settings: FrotaSettings;
+  devices: PublicDevice[];
+  policies: Policy[];
+  events: AuditEvent[];
+  catalog: CatalogApp[];
+};
+
+type Tab = "visao" | "aparelhos" | "mapa" | "politicas" | "central";
+type Filter = "todos" | "campo" | "reserva" | "atencao";
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+  const data = (await res.json()) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error || "Falha na requisição.");
+  return data;
+}
+
+export function Dashboard() {
+  const [ready, setReady] = useState(false);
+  const [authed, setAuthed] = useState(false);
+  const [defaultPin, setDefaultPin] = useState(false);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const [tab, setTab] = useState<Tab>("visao");
+  const [data, setData] = useState<Snapshot | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState({
+    name: "",
+    operator: "",
+    area: "reserva" as PublicDevice["area"],
+    policyId: "politica-escritorio",
+  });
+  const [policyDraft, setPolicyDraft] = useState<Policy | null>(null);
+  const [filter, setFilter] = useState<Filter>("todos");
+  const [settingsDraft, setSettingsDraft] = useState<FrotaSettings | null>(null);
+
+  const refresh = useCallback(async () => {
+    const snapshot = await api<Snapshot>("/api/frota/devices");
+    setData(snapshot);
+    setSettingsDraft((current) => current || snapshot.settings);
+    setSelectedId((current) => current || snapshot.devices[0]?.id || null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ ok: boolean; usingDefaultPin: boolean }>("/api/frota/session")
+      .then(async (session) => {
+        if (cancelled) return;
+        setDefaultPin(session.usingDefaultPin);
+        setAuthed(session.ok);
+        if (session.ok) await refresh();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!authed) return;
+    const timer = window.setInterval(() => {
+      refresh().catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [authed, refresh]);
+
+  const selected = useMemo(
+    () => data?.devices.find((device) => device.id === selectedId) || null,
+    [data, selectedId],
+  );
+
+  async function onLogin(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setBusy("login");
+    try {
+      await api("/api/frota/login", { method: "POST", body: JSON.stringify({ pin }) });
+      setAuthed(true);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "PIN incorreto.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function run(label: string, fn: () => Promise<void>) {
+    setError("");
+    setBusy(label);
+    try {
+      await fn();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível concluir.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function sendCommand(type: "lock" | "unlock" | "locate" | "ring", message?: string) {
+    if (!selected) return;
+    await run(type, async () => {
+      await api(`/api/frota/devices/${selected.id}/command`, {
+        method: "POST",
+        body: JSON.stringify({ type, message }),
+      });
+    });
+  }
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-svh items-center justify-center text-muted">Carregando controle…</div>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <div className="flex min-h-svh flex-col bg-surface">
+        <header className="border-b border-line bg-surface-elevated px-6 py-5">
+          <div className="mx-auto flex max-w-lg items-center justify-between">
+            <Wordmark size="sm" />
+            <Link href="/" className="text-sm text-muted hover:text-accent">
+              Voltar ao site
+            </Link>
+          </div>
+        </header>
+        <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-6 py-16">
+          <p className="mb-3 font-display text-sm font-semibold uppercase tracking-[0.18em] text-accent">
+            L² Controle
+          </p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
+            Central da frota
+          </h1>
+          <p className="mt-3 text-muted">
+            Restrinja aplicativos, localize aparelhos em campo e bloqueie o celular se ele sair da operação.
+          </p>
+          <form onSubmit={onLogin} className="mt-10 space-y-4">
+            <label className="block text-sm font-medium text-ink-soft" htmlFor="pin">
+              PIN da central
+            </label>
+            <input
+              id="pin"
+              type="password"
+              inputMode="numeric"
+              autoComplete="current-password"
+              value={pin}
+              onChange={(event) => setPin(event.target.value)}
+              className="w-full rounded-md border border-line bg-surface-elevated px-4 py-3 text-ink outline-none focus:border-accent"
+              placeholder="••••"
+              required
+            />
+            {defaultPin ? (
+              <p className="text-sm text-muted">
+                Primeiro acesso: PIN inicial <span className="font-semibold text-ink">2468</span>. Depois defina{" "}
+                <code className="text-xs">FROTA_PIN</code> no servidor.
+              </p>
+            ) : null}
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <button
+              type="submit"
+              disabled={busy === "login"}
+              className="w-full rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-accent-bright disabled:opacity-60"
+            >
+              Entrar
+            </button>
+          </form>
+        </main>
+      </div>
+    );
+  }
+
+  const devices = data?.devices || [];
+  const online = devices.filter((d) => d.online && !d.locked).length;
+  const field = devices.filter((d) => d.area === "operacao").length;
+  const alerts = devices.filter((d) => attentionReason(d));
+  const visible = devices.filter((device) => {
+    if (filter === "campo") return device.area === "operacao";
+    if (filter === "reserva") return device.area !== "operacao";
+    if (filter === "atencao") return Boolean(attentionReason(device));
+    return true;
+  });
+
+  return (
+    <div className="min-h-svh bg-surface">
+      <header className="sticky top-0 z-20 border-b border-line bg-surface-elevated/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-4 md:px-6">
+          <Wordmark size="sm" />
+          <span className="hidden font-display text-sm font-semibold text-ink-soft sm:inline">Controle</span>
+          <nav className="flex flex-1 flex-wrap gap-1" aria-label="Painel">
+            {(
+              [
+                ["visao", "Visão geral"],
+                ["aparelhos", "Aparelhos"],
+                ["mapa", "Mapa"],
+                ["politicas", "Políticas"],
+                ["central", "Central"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`rounded-md px-3 py-2 text-sm font-medium ${
+                  tab === id ? "bg-accent text-white" : "text-ink-soft hover:bg-surface"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <Link href="/aparelho" className="text-sm font-medium text-accent hover:text-accent-bright">
+            App do aparelho
+          </Link>
+          <button
+            type="button"
+            className="text-sm text-muted hover:text-ink"
+            onClick={() =>
+              run("logout", async () => {
+                await api("/api/frota/logout", { method: "POST" });
+                setAuthed(false);
+              })
+            }
+          >
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        {error ? (
+          <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        ) : null}
+
+        {tab === "visao" || tab === "aparelhos" ? (
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
+            <section>
+              {tab === "visao" ? (
+                <div className="mb-6 grid grid-cols-2 gap-3">
+                  <Kpi label="Aparelhos" value={devices.length} />
+                  <Kpi label="Em campo" value={field} />
+                  <Kpi label="Online" value={online} />
+                  <Kpi label="Atenção" value={alerts.length} accent={alerts.length > 0} />
+                </div>
+              ) : null}
+
+              {tab === "visao" && alerts.length > 0 ? (
+                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+                  <p className="font-medium text-amber-900">Precisa da central</p>
+                  <ul className="mt-2 space-y-1 text-amber-800">
+                    {alerts.slice(0, 4).map((device) => (
+                      <li key={device.id}>
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => {
+                            setSelectedId(device.id);
+                            setTab("aparelhos");
+                          }}
+                        >
+                          {device.name}: {attentionReason(device)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="font-display text-lg font-semibold text-ink">Frota</h2>
+                <button
+                  type="button"
+                  onClick={() => setCreating((v) => !v)}
+                  className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+                >
+                  Cadastrar
+                </button>
+              </div>
+
+              <div className="mb-3 flex flex-wrap gap-1">
+                {(
+                  [
+                    ["todos", "Todos"],
+                    ["campo", "Em campo"],
+                    ["reserva", "Na empresa"],
+                    ["atencao", "Atenção"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setFilter(id)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      filter === id ? "bg-ink text-white" : "bg-surface text-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {creating ? (
+                <form
+                  className="mb-4 space-y-3 rounded-md border border-line bg-surface-elevated p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    run("create", async () => {
+                      const result = await api<{ device: PublicDevice }>("/api/frota/devices", {
+                        method: "POST",
+                        body: JSON.stringify(draft),
+                      });
+                      setSelectedId(result.device.id);
+                      setCreating(false);
+                      setDraft({ name: "", operator: "", area: "reserva", policyId: "politica-escritorio" });
+                    });
+                  }}
+                >
+                  <input
+                    required
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    placeholder="Nome (ex: OP-05)"
+                    className="w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                  <input
+                    value={draft.operator}
+                    onChange={(e) => setDraft({ ...draft, operator: e.target.value })}
+                    placeholder="Responsável no estoque (opcional)"
+                    className="w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                  <p className="text-xs text-muted">
+                    Entra como reserva. A política de campo só vale quando alguém levar o aparelho.
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={busy === "create"}
+                    className="w-full rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    Gerar código de pareamento
+                  </button>
+                </form>
+              ) : null}
+
+              <ul className="divide-y divide-line overflow-hidden rounded-md border border-line bg-surface-elevated">
+                {visible.map((device) => {
+                  const status = statusOf(device);
+                  return (
+                    <li key={device.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(device.id);
+                          setTab("aparelhos");
+                        }}
+                        className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left ${
+                          selectedId === device.id ? "bg-accent/10" : "hover:bg-surface"
+                        }`}
+                      >
+                        <span>
+                          <span className="block font-display font-semibold text-ink">{device.name}</span>
+                          <span className="text-sm text-muted">
+                            {device.operator}
+                            {device.destination ? ` · ${device.destination}` : ` · ${AREA_LABEL[device.area]}`}
+                          </span>
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.className}`}>
+                          {status.label}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+
+            <section className="rounded-md border border-line bg-surface-elevated p-5 md:p-6">
+              {selected ? (
+                <DevicePanel
+                  key={selected.id}
+                  device={selected}
+                  policies={data?.policies || []}
+                  catalog={data?.catalog || []}
+                  busy={busy}
+                  onCommand={sendCommand}
+                  onSave={(patch) =>
+                    run("save", async () => {
+                      await api(`/api/frota/devices/${selected.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(patch),
+                      });
+                    })
+                  }
+                  onDelete={() =>
+                    run("delete", async () => {
+                      await api(`/api/frota/devices/${selected.id}`, { method: "DELETE" });
+                      setSelectedId(null);
+                    })
+                  }
+                  onLifecycle={(action, payload) =>
+                    run(action, async () => {
+                      await api(`/api/frota/devices/${selected.id}/lifecycle`, {
+                        method: "POST",
+                        body: JSON.stringify({ action, ...payload }),
+                      });
+                    })
+                  }
+                />
+              ) : (
+                <p className="text-muted">Selecione um aparelho.</p>
+              )}
+            </section>
+          </div>
+        ) : null}
+
+        {tab === "mapa" ? (
+          <section className="space-y-4">
+            <div>
+              <h2 className="font-display text-2xl font-semibold text-ink">Localização da frota</h2>
+              <p className="mt-1 text-muted">
+                Os aparelhos enviam GPS pelo app da operação. Clique no pin para abrir o detalhe.
+              </p>
+            </div>
+            <FleetMap
+              devices={devices}
+              selectedId={selectedId}
+              onSelect={(id) => {
+                setSelectedId(id);
+                setTab("aparelhos");
+              }}
+              height="h-[28rem] md:h-[36rem]"
+            />
+          </section>
+        ) : null}
+
+        {tab === "politicas" ? (
+          <section className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_1fr]">
+            <div>
+              <h2 className="font-display text-2xl font-semibold text-ink">Políticas de apps</h2>
+              <p className="mt-2 text-sm text-muted">
+                O que o aparelho pode abrir no modo operação. Redes sociais ficam fora da política de campo.
+              </p>
+              <ul className="mt-6 space-y-2">
+                {(data?.policies || []).map((policy) => (
+                  <li key={policy.id}>
+                    <button
+                      type="button"
+                      onClick={() => setPolicyDraft({ ...policy, allowedAppIds: [...policy.allowedAppIds] })}
+                      className={`w-full rounded-md border px-4 py-3 text-left ${
+                        policyDraft?.id === policy.id
+                          ? "border-accent bg-accent/10"
+                          : "border-line bg-surface-elevated hover:border-accent"
+                      }`}
+                    >
+                      <span className="block font-semibold text-ink">{policy.name}</span>
+                      <span className="text-sm text-muted">{policy.allowedAppIds.length} apps</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="mt-4 text-sm font-medium text-accent"
+                onClick={() =>
+                  setPolicyDraft({
+                    id: "",
+                    name: "Nova política",
+                    description: "",
+                    allowedAppIds: ["telefone", "sms"],
+                    kioskMode: true,
+                  })
+                }
+              >
+                Criar política
+              </button>
+            </div>
+            {policyDraft ? (
+              <form
+                className="rounded-md border border-line bg-surface-elevated p-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  run("policy", async () => {
+                    await api("/api/frota/policies", {
+                      method: "POST",
+                      body: JSON.stringify(policyDraft),
+                    });
+                  });
+                }}
+              >
+                <label className="text-sm font-medium text-ink-soft">Nome</label>
+                <input
+                  value={policyDraft.name}
+                  onChange={(e) => setPolicyDraft({ ...policyDraft, name: e.target.value })}
+                  className="mt-1 mb-4 w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+                <label className="text-sm font-medium text-ink-soft">Descrição</label>
+                <textarea
+                  value={policyDraft.description}
+                  onChange={(e) => setPolicyDraft({ ...policyDraft, description: e.target.value })}
+                  rows={2}
+                  className="mt-1 mb-4 w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+                <label className="mb-2 flex items-center gap-2 text-sm text-ink-soft">
+                  <input
+                    type="checkbox"
+                    checked={policyDraft.kioskMode}
+                    onChange={(e) => setPolicyDraft({ ...policyDraft, kioskMode: e.target.checked })}
+                  />
+                  Modo kiosk (tela cheia, só o permitido)
+                </label>
+                <p className="mt-4 mb-2 text-sm font-medium text-ink-soft">Aplicativos liberados</p>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {(data?.catalog || []).map((app) => {
+                    const checked = policyDraft.allowedAppIds.includes(app.id);
+                    return (
+                      <li key={app.id}>
+                        <label className="flex cursor-pointer items-start gap-2 rounded-md border border-line px-3 py-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const allowed = checked
+                                ? policyDraft.allowedAppIds.filter((id) => id !== app.id)
+                                : [...policyDraft.allowedAppIds, app.id];
+                              setPolicyDraft({ ...policyDraft, allowedAppIds: allowed });
+                            }}
+                          />
+                          <span>
+                            <span className="block font-medium text-ink">{app.name}</span>
+                            <span className="text-xs text-muted">{app.description}</span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button
+                  type="submit"
+                  disabled={busy === "policy"}
+                  className="mt-5 rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-bright"
+                >
+                  Salvar política
+                </button>
+              </form>
+            ) : (
+              <p className="text-muted">Escolha uma política para editar.</p>
+            )}
+          </section>
+        ) : null}
+
+        {tab === "central" && settingsDraft ? (
+          <section className="mx-auto max-w-xl rounded-md border border-line bg-surface-elevated p-6">
+            <h2 className="font-display text-2xl font-semibold text-ink">A central</h2>
+            <p className="mt-2 text-sm text-muted">
+              Nome e telefone aparecem no aparelho. A mensagem é a que o operador vê se o celular for bloqueado.
+            </p>
+            <form
+              className="mt-6 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                run("settings", async () => {
+                  const result = await api<{ settings: FrotaSettings }>("/api/frota/settings", {
+                    method: "POST",
+                    body: JSON.stringify(settingsDraft),
+                  });
+                  setSettingsDraft(result.settings);
+                });
+              }}
+            >
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Empresa</span>
+                <input
+                  value={settingsDraft.companyName}
+                  onChange={(event) => setSettingsDraft({ ...settingsDraft, companyName: event.target.value })}
+                  className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Telefone da central</span>
+                <input
+                  value={settingsDraft.centralPhone}
+                  onChange={(event) => setSettingsDraft({ ...settingsDraft, centralPhone: event.target.value })}
+                  placeholder="11 90000-0000"
+                  className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Mensagem de bloqueio / sumiço</span>
+                <textarea
+                  value={settingsDraft.lostMessage}
+                  onChange={(event) => setSettingsDraft({ ...settingsDraft, lostMessage: event.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-line px-3 py-2 outline-none focus:border-accent"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={busy === "settings"}
+                className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-bright"
+              >
+                Salvar central
+              </button>
+            </form>
+          </section>
+        ) : null}
+
+        {tab === "visao" ? (
+          <section className="mt-8 rounded-md border border-line bg-surface-elevated p-5">
+            <h3 className="font-display text-lg font-semibold text-ink">Rotina do dia</h3>
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
+              <li>Cadastre o celular na reserva e pareie em /aparelho com o código.</li>
+              <li>
+                Na saída, use <strong className="text-ink">Mandar para a operação</strong>: quem leva, a rota e o retorno.
+                O aparelho entra em modo campo e perde redes sociais.
+              </li>
+              <li>No mapa, acompanhe quem está em campo. Bateria baixa ou sem sinal aparece em Atenção.</li>
+              <li>
+                Se sumir: <strong className="text-ink">Aparelho sumiu</strong> bloqueia, toca e pede GPS de uma vez.
+              </li>
+              <li>No retorno, registre a entrada. O aparelho volta para a reserva, sem o modo campo.</li>
+            </ol>
+            <p className="mt-3 text-xs text-muted">
+              Este app governa a tela da operação e o bloqueio remoto. O MDM nativo Android/iOS pode entrar depois, no
+              mesmo painel.
+            </p>
+            <button
+              type="button"
+              className="mt-4 text-sm text-muted underline hover:text-ink"
+              onClick={() =>
+                run("reset", async () => {
+                  const snapshot = await api<Snapshot>("/api/frota/reset-demo", { method: "POST" });
+                  setData(snapshot);
+                  setSettingsDraft(snapshot.settings);
+                })
+              }
+            >
+              Restaurar frota de exemplo
+            </button>
+          </section>
+        ) : null}
+
+        {tab === "visao" && data?.events?.length ? (
+          <section className="mt-6">
+            <h3 className="mb-3 font-display text-lg font-semibold text-ink">Atividade</h3>
+            <ul className="divide-y divide-line rounded-md border border-line bg-surface-elevated">
+              {data.events.slice(0, 8).map((event) => (
+                <li key={event.id} className="flex justify-between gap-4 px-4 py-3 text-sm">
+                  <span className="text-ink-soft">{event.detail}</span>
+                  <span className="shrink-0 text-muted">{formatWhen(event.at)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </main>
+    </div>
+  );
+}
+
+function Kpi({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) {
+  return (
+    <div className="rounded-md border border-line bg-surface-elevated px-4 py-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+      <p className={`mt-1 font-display text-2xl font-semibold ${accent ? "text-red-600" : "text-ink"}`}>{value}</p>
+    </div>
+  );
+}

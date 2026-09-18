@@ -16,6 +16,26 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## L² Controle — frota de celulares
+
+Central da operação para aparelhos da empresa:
+
+- Painel: [http://localhost:3000/frota](http://localhost:3000/frota) — PIN inicial `2468` (troque com `FROTA_PIN` no servidor).
+- App do aparelho: [http://localhost:3000/aparelho](http://localhost:3000/aparelho) — pareie com o código de 6 dígitos.
+
+Na central você define quais apps a operação pode usar, vê o GPS da frota e pode localizar, tocar ou bloquear um celular. O aparelho precisa abrir `/aparelho`, autorizar a localização e, de preferência, ser adicionado à tela inicial.
+
+Opcional no servidor:
+
+```
+FROTA_PIN=seu-pin
+FROTA_SECRET=uma-chave-longa
+```
+
+Os dados da frota ficam em `data/frota.json` (precisa de escrita no Node da Hostinger).
+
+Rotina: o celular entra como **reserva**. Na saída, use **Mandar para a operação** (quem leva + rota) — isso aplica a política de campo. Se sumir, **Aparelho sumiu** bloqueia, toca e pede GPS. No retorno, registre a entrada.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

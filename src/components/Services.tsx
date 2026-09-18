@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const services = [
   {
     title: "Sistemas web",
@@ -8,6 +10,11 @@ const services = [
     title: "Software sob medida",
     description:
       "Produtos digitais feitos sob medida — do fluxo de negócio à experiência do usuário.",
+  },
+  {
+    title: "Controle de celulares",
+    description:
+      "Limite apps na operação, localize a frota e bloqueie o aparelho à distância. Acesse a central em /frota.",
   },
 ];
 
@@ -28,7 +35,7 @@ export function Services() {
           </p>
         </div>
 
-        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-2">
+        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-3">
           {services.map((service) => (
             <li key={service.title} className="group">
               <h3 className="font-display text-xl font-semibold text-ink">
@@ -36,6 +43,14 @@ export function Services() {
               </h3>
               <p className="mt-3 leading-relaxed text-muted">{service.description}</p>
               <div className="mt-6 h-px w-12 bg-line transition-all duration-500 group-hover:w-full group-hover:bg-accent" />
+              {service.title === "Controle de celulares" ? (
+                <Link
+                  href="/frota"
+                  className="mt-4 inline-block text-sm font-semibold text-accent hover:text-accent-bright"
+                >
+                  Abrir central da frota
+                </Link>
+              ) : null}
             </li>
           ))}
         </ul>

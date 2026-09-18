@@ -1,0 +1,23 @@
+{
+  "name": "L² Aparelho",
+  "short_name": "L² Aparelho",
+  "description": "Launcher da operação: apps permitidos, GPS e bloqueio remoto.",
+  "start_url": "/aparelho",
+  "scope": "/aparelho",
+  "display": "standalone",
+  "background_color": "#0f1620",
+  "theme_color": "#1a2430",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/logo-mark.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
