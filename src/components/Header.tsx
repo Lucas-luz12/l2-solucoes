@@ -20,7 +20,7 @@ export function Header() {
         >
           <Wordmark size="sm" />
         </a>
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Principal">
+        <nav className="flex items-center gap-4 sm:gap-8" aria-label="Principal">
           {links.map((link) =>
             link.href.startsWith("/") ? (
               <Link
@@ -34,7 +34,7 @@ export function Header() {
               <a
                 key={link.href}
                 href={link.href}
-                className="text-sm font-medium text-ink-soft/75 transition-colors hover:text-accent"
+                className="hidden text-sm font-medium text-ink-soft/75 transition-colors hover:text-accent md:inline"
               >
                 {link.label}
               </a>
