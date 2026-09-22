@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Wordmark } from "./Wordmark";
 
 export function Footer() {
@@ -13,9 +14,12 @@ export function Footer() {
           </p>
         </div>
         <div className="flex flex-col gap-2 text-sm text-muted md:items-end">
-          <a href="/proposta" className="font-medium text-accent hover:text-accent-bright">
+          <Link href="/acougue" className="font-medium text-accent hover:text-accent-bright">
+            L² Reserva
+          </Link>
+          <Link href="/proposta" className="hover:text-accent">
             L² Proposta
-          </a>
+          </Link>
           <p>© {year} L² Soluções. Todos os direitos reservados.</p>
         </div>
       </div>

@@ -7,7 +7,11 @@ type ContactProps = {
 
 export function Contact({ sent = false, interest }: ContactProps) {
   const defaultMessage =
-    interest === "proposta" ? "Quero usar o L² Proposta na minha empresa." : "";
+    interest === "acougue"
+      ? "Quero o L² Reserva no meu açougue, no lugar da reserva por WhatsApp."
+      : interest === "proposta"
+        ? "Quero usar o L² Proposta na minha empresa."
+        : "";
   return (
     <section id="contato" className="bg-surface py-24 md:py-32">
       <div className="mx-auto max-w-6xl px-6 md:px-8">

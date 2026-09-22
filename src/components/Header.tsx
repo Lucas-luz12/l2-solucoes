@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Wordmark } from "./Wordmark";
 
 const links = [
+  { href: "/acougue", label: "Açougue" },
+  { href: "/proposta", label: "Proposta" },
   { href: "/#servicos", label: "Serviços" },
-  { href: "/proposta", label: "Produto" },
-  { href: "/#abordagem", label: "Abordagem" },
   { href: "/#contato", label: "Contato" },
 ];
 

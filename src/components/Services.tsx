@@ -10,6 +10,12 @@ const services: { title: string; description: string; href?: string }[] = [
       "Produtos digitais feitos sob medida — do fluxo de negócio à experiência do usuário.",
   },
   {
+    title: "L² Reserva",
+    description:
+      "Vitrine de kits e cortes para açougue. O cliente reserva a retirada e o balcão vê quanto separar em cada horário.",
+    href: "/acougue",
+  },
+  {
     title: "L² Proposta",
     description:
       "Produto próprio para quem vende serviço: orçamento com itens, link para o cliente aceitar e painel do que está em aberto.",
@@ -34,7 +40,7 @@ export function Services() {
           </p>
         </div>
 
-        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-3">
+        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-2">
           {services.map((service) => (
             <li key={service.title} className="group">
               <h3 className="font-display text-xl font-semibold text-ink">
