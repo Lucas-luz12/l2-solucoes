@@ -50,6 +50,12 @@ export function Hero() {
             Ver serviços
           </a>
         </div>
+        <a
+          href="/proposta"
+          className="animate-rise-delay-3 mt-6 text-sm font-medium text-accent transition-colors hover:text-accent-bright"
+        >
+          Conhecer o L² Proposta
+        </a>
       </div>
     </section>
   );

@@ -2,9 +2,12 @@ const CONTACT_EMAIL = "contato@l2solucoes.com.br";
 
 type ContactProps = {
   sent?: boolean;
+  interest?: string;
 };
 
-export function Contact({ sent = false }: ContactProps) {
+export function Contact({ sent = false, interest }: ContactProps) {
+  const defaultMessage =
+    interest === "proposta" ? "Quero usar o L² Proposta na minha empresa." : "";
   return (
     <section id="contato" className="bg-surface py-24 md:py-32">
       <div className="mx-auto max-w-6xl px-6 md:px-8">
@@ -96,6 +99,7 @@ export function Contact({ sent = false }: ContactProps) {
                   rows={4}
                   className="w-full resize-y rounded-md border border-line bg-surface-elevated px-4 py-3 text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
                   placeholder="O que você precisa construir?"
+                  defaultValue={defaultMessage}
                 />
               </div>
               <button

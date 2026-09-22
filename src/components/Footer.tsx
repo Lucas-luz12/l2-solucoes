@@ -12,9 +12,12 @@ export function Footer() {
             Tecnologia · Processos · Resultados
           </p>
         </div>
-        <p className="text-sm text-muted">
-          © {year} L² Soluções. Todos os direitos reservados.
-        </p>
+        <div className="flex flex-col gap-2 text-sm text-muted md:items-end">
+          <a href="/proposta" className="font-medium text-accent hover:text-accent-bright">
+            L² Proposta
+          </a>
+          <p>© {year} L² Soluções. Todos os direitos reservados.</p>
+        </div>
       </div>
     </footer>
   );

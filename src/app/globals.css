@@ -114,6 +114,16 @@ body {
   animation: glow-breathe 6s ease-in-out infinite;
 }
 
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

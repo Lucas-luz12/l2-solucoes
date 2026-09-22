@@ -1,4 +1,4 @@
-const services = [
+const services: { title: string; description: string; href?: string }[] = [
   {
     title: "Sistemas web",
     description:
@@ -8,6 +8,12 @@ const services = [
     title: "Software sob medida",
     description:
       "Produtos digitais feitos sob medida — do fluxo de negócio à experiência do usuário.",
+  },
+  {
+    title: "L² Proposta",
+    description:
+      "Produto próprio para quem vende serviço: orçamento com itens, link para o cliente aceitar e painel do que está em aberto.",
+    href: "/proposta",
   },
 ];
 
@@ -28,13 +34,18 @@ export function Services() {
           </p>
         </div>
 
-        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-2">
+        <ul className="mt-16 grid gap-x-12 gap-y-14 md:grid-cols-3">
           {services.map((service) => (
             <li key={service.title} className="group">
               <h3 className="font-display text-xl font-semibold text-ink">
                 {service.title}
               </h3>
               <p className="mt-3 leading-relaxed text-muted">{service.description}</p>
+              {service.href ? (
+                <a href={service.href} className="mt-4 inline-block text-sm font-medium text-accent hover:text-accent-bright">
+                  Conhecer o produto
+                </a>
+              ) : null}
               <div className="mt-6 h-px w-12 bg-line transition-all duration-500 group-hover:w-full group-hover:bg-accent" />
             </li>
           ))}
