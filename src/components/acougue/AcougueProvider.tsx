@@ -8,6 +8,7 @@ type AcougueContextValue = {
   saveShop: (shop: Shop) => Promise<void>;
   saveItem: (item: CatalogInput) => Promise<void>;
   setStatus: (id: string, status: ReservationStatus) => Promise<void>;
+  deleteReservation: (id: string) => Promise<void>;
   resetDemo: () => Promise<AcougueData>;
 };
 
@@ -41,6 +42,7 @@ export function AcougueProvider({
       saveShop: async (shop) => setData(await request({ action: "save-shop", shop })),
       saveItem: async (item) => setData(await request({ action: "save-item", item })),
       setStatus: async (id, status) => setData(await request({ action: "set-status", id, status })),
+      deleteReservation: async (id) => setData(await request({ action: "delete-reservation", id })),
       resetDemo: async () => {
         const next = await request({ action: "reset" });
         setData(next);

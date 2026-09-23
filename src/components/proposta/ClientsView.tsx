@@ -69,7 +69,7 @@ export function ClientsView() {
 
   async function onDelete() {
     if (!form.id) return;
-    if (!window.confirm("Apagar este cliente?")) return;
+    if (!window.confirm("Apagar este cliente e as propostas ligadas a ele?")) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -91,7 +91,7 @@ export function ClientsView() {
       <p className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-accent">Clientes</p>
       <h1 className="mt-2 font-display text-3xl tracking-tight text-ink">Quem recebe a proposta</h1>
       <p className="mt-2 max-w-2xl text-muted">
-        O telefone com DDD abre o WhatsApp já com o texto da proposta. O nome da empresa aparece no link que o cliente vê.
+        Cadastre só o que a proposta precisa. O link público mostra nome e cidade, e esconde e-mail e telefone. Apagar o cliente também apaga as propostas ligadas a ele.
       </p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">

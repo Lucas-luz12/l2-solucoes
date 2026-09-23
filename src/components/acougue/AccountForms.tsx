@@ -6,7 +6,7 @@ import { useState, type FormEvent } from "react";
 import { DEMO_EMAIL, DEMO_PASSWORD } from "@/lib/acougue/demo";
 import { fieldClass, primaryButtonClass } from "@/components/proposta/ui";
 
-async function submitAccount(body: Record<string, string>) {
+async function submitAccount(body: Record<string, string | boolean>) {
   const response = await fetch("/api/acougue/conta", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -73,6 +73,11 @@ export function LoginForm() {
       <p className="mt-6 text-sm leading-relaxed text-muted">
         Demonstração: {DEMO_EMAIL} · senha {DEMO_PASSWORD}
       </p>
+      <p className="mt-3 text-sm">
+        <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+          Aviso de privacidade
+        </Link>
+      </p>
       <p className="mt-3 text-sm text-ink-soft">
         Ainda sem conta?{" "}
         <Link href="/acougue/criar" className="font-medium text-accent hover:text-accent-bright">
@@ -89,6 +94,7 @@ export function RegisterForm() {
   const [shopName, setShopName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -97,7 +103,7 @@ export function RegisterForm() {
     setBusy(true);
     setError(null);
     try {
-      await submitAccount({ action: "register", ownerName, shopName, email, password });
+      await submitAccount({ action: "register", ownerName, shopName, email, password, privacyAccepted: accepted });
       router.push("/acougue/painel");
       router.refresh();
     } catch (reason) {
@@ -154,8 +160,24 @@ export function RegisterForm() {
             className={`${fieldClass} mt-1.5`}
           />
         </label>
+        <label className="flex items-start gap-2 text-sm text-ink-soft">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={accepted}
+            onChange={(event) => setAccepted(event.target.checked)}
+            required
+          />
+          <span>
+            Concordo com o{" "}
+            <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+              aviso de privacidade
+            </Link>
+            . A conta guarda e-mail e senha para entrar no painel. Os dados de quem reserva ficam com o açougue.
+          </span>
+        </label>
         {error ? <p className="text-sm text-[#9a4d45]">{error}</p> : null}
-        <button type="submit" className={`${primaryButtonClass} w-full`} disabled={busy}>
+        <button type="submit" className={`${primaryButtonClass} w-full`} disabled={busy || !accepted}>
           Criar conta e abrir o painel
         </button>
       </form>

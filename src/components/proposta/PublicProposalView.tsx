@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatDate } from "@/lib/proposta/dates";
 import {
@@ -16,6 +17,7 @@ export function PublicProposalView({ initial }: { initial: PublicProposal }) {
   const [data, setData] = useState(initial);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -49,7 +51,7 @@ export function PublicProposalView({ initial }: { initial: PublicProposal }) {
       const response = await fetch(`/api/public/${proposal.token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, name, note }),
+        body: JSON.stringify({ action, name, note, privacyAccepted: accepted }),
       });
       const body = (await response.json()) as PublicProposal & { error?: string };
       if (!response.ok) throw new Error(body.error || "Não foi possível registrar a resposta.");
@@ -209,12 +211,26 @@ export function PublicProposalView({ initial }: { initial: PublicProposal }) {
                   placeholder="Opcional. Um ajuste de prazo, um sim com condição."
                 />
               </label>
+              <label className="mt-4 flex items-start gap-2 text-sm text-ink-soft">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={accepted}
+                  onChange={(event) => setAccepted(event.target.checked)}
+                />
+                <span>
+                  Concordo em registrar meu nome nesta resposta para {company.name}.{" "}
+                  <Link href="/privacidade" className="font-medium text-accent">
+                    Aviso de privacidade
+                  </Link>
+                </span>
+              </label>
               {error ? <p className="mt-3 text-sm text-[#9a4d45]">{error}</p> : null}
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   type="button"
                   className={primaryButtonClass}
-                  disabled={busy}
+                  disabled={busy || !accepted}
                   onClick={() => respond("aceita")}
                 >
                   Aceitar proposta
@@ -222,7 +238,7 @@ export function PublicProposalView({ initial }: { initial: PublicProposal }) {
                 <button
                   type="button"
                   className={secondaryButtonClass}
-                  disabled={busy}
+                  disabled={busy || !accepted}
                   onClick={() => respond("recusada")}
                 >
                   Recusar

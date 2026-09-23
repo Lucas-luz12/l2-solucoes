@@ -76,6 +76,9 @@ export default async function ReservationPage({
         <p className="mt-4 font-display text-2xl font-semibold text-ink">{formatBRL(total)}</p>
         {reservation.notes ? <p className="mt-3 text-sm text-muted">Obs.: {reservation.notes}</p> : null}
         <p className="mt-4 text-sm leading-relaxed text-muted">
+          Este link é da sua reserva. Guarde o código para a retirada.
+        </p>
+        <p className="mt-4 text-sm leading-relaxed text-muted">
           {[shop.address, shop.city].filter(Boolean).join(", ")}
           {shop.pickupNote ? ` ${shop.pickupNote}` : ""}
         </p>
@@ -95,6 +98,12 @@ export default async function ReservationPage({
             className="inline-flex rounded-md border border-line px-4 py-2.5 text-sm font-medium text-ink-soft hover:border-accent hover:text-accent"
           >
             Voltar à vitrine
+          </Link>
+          <Link
+            href="/privacidade"
+            className="inline-flex rounded-md border border-line px-4 py-2.5 text-sm font-medium text-ink-soft hover:border-accent hover:text-accent"
+          >
+            Privacidade
           </Link>
         </div>
       </article>

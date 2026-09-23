@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readSession } from "@/lib/acougue/auth";
 import { getShop, StoreError } from "@/lib/acougue/store";
+import { clientIp, rateLimit, tooManyRequests } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ function sniff(bytes: Uint8Array, ext: "jpg" | "png" | "webp") {
 
 export async function POST(request: Request) {
   try {
+    if (!rateLimit(`midia:${clientIp(request)}`, 20, 10 * 60 * 1000)) return tooManyRequests();
     const session = await readSession();
     if (!session) return Response.json({ error: "Entre na conta do açougue." }, { status: 401 });
     await getShop(session.shopId);

@@ -29,7 +29,8 @@ export async function GET(
     return new Response(bytes, {
       headers: {
         "Content-Type": TYPES[ext] ?? "application/octet-stream",
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "private, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch {

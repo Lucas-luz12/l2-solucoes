@@ -56,6 +56,7 @@ export type Reservation = {
   items: ReservationLine[];
   status: ReservationStatus;
   createdAt: string;
+  privacyAcceptedAt?: string | null;
 };
 
 export type AcougueData = {
@@ -72,6 +73,7 @@ export type Account = {
   passwordSalt: string;
   shopId: string;
   createdAt: string;
+  privacyAcceptedAt?: string | null;
 };
 
 export type Database = {
@@ -86,6 +88,7 @@ export type ReservationInput = {
   pickupDate: string;
   slot: string;
   notes: string;
+  privacyAccepted?: boolean;
   items: { itemId: string; quantity: number }[];
 };
 

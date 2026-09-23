@@ -1,7 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { hashPassword, passwordMatches } from "@/lib/security/password";
 import { addCalendarDays, saoPauloToday } from "./dates";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./demo";
 import { effectiveStatus } from "./present";
 import { createSeed } from "./seed";
 import type {
@@ -102,11 +104,34 @@ function applyExpiry(workspace: Workspace, today: string) {
   return { workspace: changed ? { ...workspace, proposals } : workspace, changed };
 }
 
+function ensureOperator(workspace: Workspace) {
+  if (workspace.operator?.passwordHash && workspace.operator.email) return { workspace, changed: false };
+  const password = hashPassword(DEMO_PASSWORD);
+  return {
+    workspace: {
+      ...workspace,
+      operator: {
+        email: DEMO_EMAIL,
+        passwordHash: password.hash,
+        passwordSalt: password.salt,
+      },
+    },
+    changed: true,
+  };
+}
+
+export function presentWorkspace(workspace: Workspace): Workspace {
+  const copy = structuredClone(workspace);
+  delete copy.operator;
+  return copy;
+}
+
 async function load() {
   const today = saoPauloToday();
   const current = await readWorkspace();
-  const { workspace, changed } = applyExpiry(current, today);
-  if (changed) await writeWorkspace(workspace);
+  const withOperator = ensureOperator(current);
+  const { workspace, changed } = applyExpiry(withOperator.workspace, today);
+  if (changed || withOperator.changed) await writeWorkspace(workspace);
   return workspace;
 }
 
@@ -204,17 +229,30 @@ export async function saveClient(input: ClientInput) {
   });
 }
 
+export async function loginOperator(emailInput: string, password: string) {
+  return withLock(async () => {
+    const workspace = await load();
+    const email = clean(emailInput ?? "", 120).toLowerCase();
+    const operator = workspace.operator;
+    const sameEmail = operator?.email === email;
+    const matches = sameEmail && passwordMatches(password ?? "", operator?.passwordHash, operator?.passwordSalt);
+    if (!sameEmail) passwordMatches(password ?? "");
+    if (!operator || !matches) {
+      throw new StoreError("E-mail ou senha não conferem.", 401);
+    }
+    return { email: operator.email };
+  });
+}
+
 export async function deleteClient(id: string) {
   return withLock(async () => {
     const workspace = await load();
-    if (workspace.proposals.some((proposal) => proposal.clientId === id)) {
-      throw new StoreError("Este cliente tem propostas. Apague ou troque as propostas antes.");
-    }
     const next = workspace.clients.filter((client) => client.id !== id);
     if (next.length === workspace.clients.length) {
       throw new StoreError("Cliente não encontrado.", 404);
     }
     workspace.clients = next;
+    workspace.proposals = workspace.proposals.filter((proposal) => proposal.clientId !== id);
     await writeWorkspace(workspace);
     return workspace;
   });
@@ -415,6 +453,7 @@ export async function respondProposal(
   decision: "aceita" | "recusada",
   name: string,
   note: string,
+  privacyAccepted = false,
 ) {
   return withLock(async () => {
     const workspace = await load();
@@ -430,11 +469,15 @@ export async function respondProposal(
     if (proposal.status !== "enviada" && proposal.status !== "visualizada") {
       throw new StoreError("Esta proposta não está aberta para resposta.");
     }
+    if (!privacyAccepted) {
+      throw new StoreError("Confirme o aviso de privacidade para registrar a resposta.");
+    }
     const responseName = requireText(name ?? "", "O seu nome", 2, 80);
     proposal.status = decision;
     proposal.respondedAt = new Date().toISOString();
     proposal.responseName = responseName;
     proposal.responseNote = cleanBlock(note ?? "", 500);
+    proposal.privacyAcceptedAt = proposal.respondedAt;
     proposal.updatedAt = proposal.respondedAt;
     if (!proposal.viewedAt) proposal.viewedAt = proposal.respondedAt;
     await writeWorkspace(workspace);

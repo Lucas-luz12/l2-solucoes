@@ -1,8 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { addCalendarDays, saoPauloToday } from "@/lib/proposta/dates";
-import { hashPassword, verifyPassword } from "./auth";
+import { addCalendarDays, dateDaysAgo, saoPauloToday } from "@/lib/proposta/dates";
+import { hashPassword, passwordMatches } from "@/lib/security/password";
 import { normalizeQuantity } from "./present";
 import { DEMO_EMAIL, DEMO_PASSWORD } from "./demo";
 import { createDatabase, createSeed } from "./seed";
@@ -21,6 +21,7 @@ import type {
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "acougue.json");
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const RETENTION_DAYS = 30;
 
 export const RESERVED_SLUGS = new Set(["painel", "entrar", "criar", "r", "conta", "midia", "api"]);
 
@@ -169,7 +170,11 @@ async function readData(): Promise<Database> {
   }
   try {
     const raw = JSON.parse(await readFile(DATA_FILE, "utf8")) as unknown;
-    if (isDatabase(raw)) return normalizeDatabase(raw);
+    if (isDatabase(raw)) {
+      const data = normalizeDatabase(raw);
+      if (anonymizeExpired(data)) await writeData(data);
+      return data;
+    }
     const migrated = migrateLegacy(raw as Partial<AcougueData>);
     await writeData(migrated);
     return migrated;
@@ -250,9 +255,25 @@ function uniqueSlug(data: Database, name: string) {
   return candidate;
 }
 
+function anonymizeExpired(data: Database, now = new Date()) {
+  const cutoff = dateDaysAgo(RETENTION_DAYS, now);
+  let changed = false;
+  for (const shop of data.shops) {
+    for (const reservation of shop.reservations) {
+      if (reservation.pickupDate > cutoff) continue;
+      if (reservation.customerName === "Cliente removido" && !reservation.phone && !reservation.notes) continue;
+      reservation.customerName = "Cliente removido";
+      reservation.phone = "";
+      reservation.notes = "";
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function makeCode(existing: Set<string>) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const bytes = randomBytes(6);
+    const bytes = randomBytes(8);
     let code = "";
     for (const byte of bytes) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
     if (!existing.has(code)) return code;
@@ -329,11 +350,15 @@ export type RegisterInput = {
   email: string;
   password: string;
   shopName: string;
+  privacyAccepted?: boolean;
 };
 
 export async function registerAccount(input: RegisterInput) {
   return withLock(async () => {
     const data = await readData();
+    if (!input.privacyAccepted) {
+      throw new StoreError("Confirme o aviso de privacidade para criar a conta.");
+    }
     const ownerName = requireText(input.ownerName ?? "", "O seu nome", 2, 80);
     const shopName = requireText(input.shopName ?? "", "O nome do açougue", 2, 80);
     const email = clean(input.email ?? "", 120).toLowerCase();
@@ -371,6 +396,7 @@ export async function registerAccount(input: RegisterInput) {
       passwordSalt: passwordRecord.salt,
       shopId,
       createdAt: new Date().toISOString(),
+      privacyAcceptedAt: new Date().toISOString(),
     });
     data.shops.push(bundle);
     await writeData(data);
@@ -385,7 +411,8 @@ export async function loginAccount(emailInput: string, password: string) {
     const email = clean(emailInput ?? "", 120).toLowerCase();
     const account = data.accounts.find((entry) => entry.email === email);
     const shop = account ? data.shops.find((entry) => entry.shop.id === account.shopId) : undefined;
-    if (!account || !shop || !verifyPassword(password ?? "", account.passwordHash, account.passwordSalt)) {
+    const matches = passwordMatches(password ?? "", account?.passwordHash, account?.passwordSalt);
+    if (!account || !shop || !matches) {
       throw new StoreError("E-mail ou senha não conferem.", 401);
     }
     return { accountId: account.id, shopId: account.shopId, shop: shop.shop };
@@ -489,6 +516,9 @@ export async function createReservation(input: ReservationInput) {
     const database = await readData();
     const slug = clean(input.slug ?? "", 60).toLowerCase();
     const data = findShopBySlug(database, slug);
+    if (!input.privacyAccepted) {
+      throw new StoreError("Confirme o uso do nome e do WhatsApp para esta retirada.");
+    }
     const customerName = requireText(input.customerName ?? "", "O seu nome", 2, 80);
     const phone = clean(input.phone ?? "", 30);
     if (phone.replace(/\D/g, "").length < 10) {
@@ -555,6 +585,7 @@ export async function createReservation(input: ReservationInput) {
       items: lines,
       status: "reservada",
       createdAt: new Date().toISOString(),
+      privacyAcceptedAt: new Date().toISOString(),
     };
     data.reservations.unshift(reservation);
     await writeData(database);
@@ -574,5 +605,29 @@ export async function setReservationStatus(shopId: string, id: string, status: R
     reservation.status = status;
     await writeData(data);
     return current;
+  });
+}
+
+export async function deleteReservation(shopId: string, id: string) {
+  return withLock(async () => {
+    const data = await readData();
+    const current = findShop(data, shopId);
+    const before = current.reservations.length;
+    current.reservations = current.reservations.filter((item) => item.id !== id);
+    if (current.reservations.length === before) throw new StoreError("Reserva não encontrada.", 404);
+    await writeData(data);
+    return current;
+  });
+}
+
+export async function deleteAccount(accountId: string, shopId: string) {
+  return withLock(async () => {
+    const data = await readData();
+    const account = data.accounts.find((item) => item.id === accountId && item.shopId === shopId);
+    if (!account) throw new StoreError("Conta não encontrada.", 404);
+    data.accounts = data.accounts.filter((item) => item.id !== account.id);
+    data.shops = data.shops.filter((item) => item.shop.id !== shopId);
+    await writeData(data);
+    await rm(path.join(process.cwd(), "data", "acougue-media", shopId), { recursive: true, force: true });
   });
 }

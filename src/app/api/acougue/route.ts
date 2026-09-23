@@ -1,5 +1,7 @@
 import { readSession } from "@/lib/acougue/auth";
 import {
+  deleteAccount,
+  deleteReservation,
   getShop,
   resetShop,
   saveItem,
@@ -23,12 +25,13 @@ function fail(error: unknown) {
 async function sessionShop() {
   const session = await readSession();
   if (!session) throw new StoreError("Entre na conta do açougue.", 401);
-  return session.shopId;
+  return session;
 }
 
 export async function GET() {
   try {
-    return Response.json({ data: await getShop(await sessionShop()) });
+    const session = await sessionShop();
+    return Response.json({ data: await getShop(session.shopId) });
   } catch (error) {
     return fail(error);
   }
@@ -51,7 +54,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const shopId = await sessionShop();
+    const session = await sessionShop();
+    const shopId = session.shopId;
     switch (body.action) {
       case "save-shop": {
         if (!body.shop) return Response.json({ error: "Dados da loja ausentes." }, { status: 400 });
@@ -69,6 +73,14 @@ export async function POST(request: Request) {
       }
       case "reset":
         return Response.json({ data: await resetShop(shopId) });
+      case "delete-reservation": {
+        if (!body.id) return Response.json({ error: "Reserva ausente." }, { status: 400 });
+        return Response.json({ data: await deleteReservation(shopId, body.id) });
+      }
+      case "delete-account": {
+        await deleteAccount(session.accountId, shopId);
+        return Response.json({ ok: true });
+      }
       default:
         return Response.json({ error: "Ação desconhecida." }, { status: 400 });
     }

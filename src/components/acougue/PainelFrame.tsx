@@ -55,6 +55,9 @@ export function PainelFrame({ children }: { children: React.ReactNode }) {
             <Link href={publicPath} className="font-medium text-accent hover:text-accent-bright">
               Ver vitrine
             </Link>
+            <Link href="/privacidade" className="text-muted hover:text-accent">
+              Privacidade
+            </Link>
             <button type="button" onClick={logout} className="text-muted hover:text-accent">
               Sair
             </button>

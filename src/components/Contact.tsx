@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const CONTACT_EMAIL = "contato@l2solucoes.com.br";
 
 type ContactProps = {
@@ -106,6 +108,15 @@ export function Contact({ sent = false, interest }: ContactProps) {
                   defaultValue={defaultMessage}
                 />
               </div>
+              <label className="flex items-start gap-2 text-sm text-ink-soft">
+                <input type="checkbox" name="privacidade" value="sim" required className="mt-1" />
+                <span>
+                  Concordo em enviar nome, e-mail e mensagem para a L² responder este contato.{" "}
+                  <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+                    Aviso de privacidade
+                  </Link>
+                </span>
+              </label>
               <button
                 type="submit"
                 className="w-full rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-bright sm:w-auto"

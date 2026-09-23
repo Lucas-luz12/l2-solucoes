@@ -1,4 +1,5 @@
 import { createReservation, StoreError } from "@/lib/acougue/store";
+import { clientIp, rateLimit, tooManyRequests } from "@/lib/security/rate-limit";
 import type { ReservationInput } from "@/lib/acougue/types";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (!rateLimit(`reserva:${clientIp(request)}`, 10, 10 * 60 * 1000)) return tooManyRequests();
     const result = await createReservation(body);
     return Response.json({ code: result.reservation.code });
   } catch (error) {

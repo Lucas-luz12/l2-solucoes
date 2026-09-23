@@ -1,5 +1,6 @@
 import { clearSessionCookie, setSessionCookie } from "@/lib/acougue/auth";
 import { loginAccount, registerAccount, StoreError } from "@/lib/acougue/store";
+import { clientIp, rateLimit, tooManyRequests } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ type Body = {
   email?: string;
   password?: string;
   shopName?: string;
+  privacyAccepted?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -34,16 +36,19 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
     if (body.action === "login") {
+      if (!rateLimit(`acougue-login:${clientIp(request)}`, 8, 15 * 60 * 1000)) return tooManyRequests();
       const result = await loginAccount(body.email ?? "", body.password ?? "");
       await setSessionCookie({ accountId: result.accountId, shopId: result.shopId });
       return Response.json({ ok: true, slug: result.shop.slug });
     }
     if (body.action === "register") {
+      if (!rateLimit(`acougue-register:${clientIp(request)}`, 5, 60 * 60 * 1000)) return tooManyRequests();
       const result = await registerAccount({
         ownerName: body.ownerName ?? "",
         email: body.email ?? "",
         password: body.password ?? "",
         shopName: body.shopName ?? "",
+        privacyAccepted: body.privacyAccepted,
       });
       await setSessionCookie({ accountId: result.accountId, shopId: result.shopId });
       return Response.json({ ok: true, slug: result.shop.slug });

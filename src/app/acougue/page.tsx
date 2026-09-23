@@ -60,10 +60,17 @@ export default function AcougueIntroPage() {
               <li>Abre o link do açougue. Não cria conta e não escolhe senha.</li>
               <li>Escolhe o dia, o horário e a quantidade.</li>
               <li>Informa nome e WhatsApp.</li>
-              <li>Guarda o código e retira no balcão.</li>
+              <li>
+              Guarda o código e retira no balcão. Nome e WhatsApp ficam com o açougue e saem 30 dias depois da retirada.
+            </li>
             </ol>
           </article>
         </div>
+        <p className="mt-10 text-sm">
+          <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+            Aviso de privacidade
+          </Link>
+        </p>
       </main>
     </div>
   );

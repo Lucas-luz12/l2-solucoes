@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import type { Company } from "@/lib/proposta/types";
 import { useWorkspace } from "./WorkspaceProvider";
@@ -127,6 +128,12 @@ export function SettingsView() {
           </button>
         </div>
       </form>
+      <p className="mt-8 max-w-xl text-sm leading-relaxed text-muted">
+        A empresa responde pelos dados dos clientes. Apague o cliente quando o orçamento não precisar mais do contato.{" "}
+        <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+          Aviso de privacidade
+        </Link>
+      </p>
     </div>
   );
 }

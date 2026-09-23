@@ -20,6 +20,9 @@ export function Footer() {
           <Link href="/proposta" className="hover:text-accent">
             L² Proposta
           </Link>
+          <Link href="/privacidade" className="hover:text-accent">
+            Privacidade
+          </Link>
           <p>© {year} L² Soluções. Todos os direitos reservados.</p>
         </div>
       </div>

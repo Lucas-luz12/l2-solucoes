@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useWorkspace } from "./WorkspaceProvider";
 
 const links = [
@@ -13,7 +13,18 @@ const links = [
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { workspace } = useWorkspace();
+
+  async function logout() {
+    await fetch("/api/proposta/conta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout" }),
+    });
+    router.push("/app/entrar");
+    router.refresh();
+  }
 
   return (
     <div className="flex min-h-screen flex-1 flex-col bg-surface">
@@ -29,16 +40,19 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             <Link href="/proposta" className="text-muted transition-colors hover:text-accent">
               O produto
             </Link>
-            <Link href="/" className="font-medium text-ink-soft transition-colors hover:text-accent">
-              Site
+            <Link href="/privacidade" className="text-muted transition-colors hover:text-accent">
+              Privacidade
             </Link>
+            <button type="button" onClick={logout} className="font-medium text-ink-soft hover:text-accent">
+              Sair
+            </button>
           </div>
         </div>
       </header>
 
       <div className="border-b border-accent/20 bg-accent/10">
         <p className="mx-auto max-w-6xl px-4 py-2.5 text-sm text-ink-soft md:px-8">
-          Demonstração compartilhada, com dados de exemplo. Quem acessar pode alterar.{" "}
+          Demonstração com pessoas fictícias. Os dados dos clientes ficam nesta conta.{" "}
           <Link href="/app/ajustes" className="font-medium text-accent hover:text-accent-bright">
             Restaurar em Empresa
           </Link>

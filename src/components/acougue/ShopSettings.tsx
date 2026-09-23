@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { Shop } from "@/lib/acougue/types";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/proposta/ui";
@@ -8,6 +10,7 @@ import { ShopImage } from "./ShopImage";
 import { uploadShopImage } from "./upload";
 
 export function ShopSettings() {
+  const router = useRouter();
   const { data, saveShop, resetDemo } = useAcougue();
   const [shop, setShop] = useState<Shop>(data.shop);
   const [slots, setSlots] = useState(data.shop.slots.join("\n"));
@@ -149,6 +152,70 @@ export function ShopSettings() {
           ) : null}
         </div>
       </form>
+      <section className="mt-10 border-t border-line pt-8">
+        <h2 className="font-display text-xl text-ink">Dados pessoais</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          O açougue decide sobre o nome e o WhatsApp de quem reserva. O arquivo abaixo é a cópia desta loja. Apagar uma
+          reserva tira a pessoa na hora. O que sobrar perde nome, WhatsApp e observação 30 dias depois da retirada.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            className={secondaryButtonClass}
+            onClick={() => {
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `reserva-${data.shop.slug}.json`;
+              link.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Baixar dados da loja
+          </button>
+          <button
+            type="button"
+            className={secondaryButtonClass}
+            disabled={busy}
+            onClick={async () => {
+              const warning =
+                data.shop.slug === "estrela"
+                  ? "Apagar a conta da demonstração remove cardápio, reservas e fotos deste ambiente."
+                  : "Apagar a conta remove o açougue, o cardápio, as reservas e as fotos.";
+              if (!window.confirm(warning)) return;
+              setBusy(true);
+              setMessage(null);
+              try {
+                const response = await fetch("/api/acougue", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "delete-account" }),
+                });
+                const payload = (await response.json().catch(() => ({}))) as { error?: string };
+                if (!response.ok) throw new Error(payload.error || "Não foi possível apagar a conta.");
+                await fetch("/api/acougue/conta", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "logout" }),
+                });
+                router.push("/acougue");
+                router.refresh();
+              } catch (reason) {
+                setMessage(reason instanceof Error ? reason.message : "Não foi possível apagar a conta.");
+                setBusy(false);
+              }
+            }}
+          >
+            Apagar conta e dados
+          </button>
+        </div>
+        <p className="mt-4 text-sm">
+          <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+            Ler o aviso de privacidade
+          </Link>
+        </p>
+      </section>
     </div>
   );
 }

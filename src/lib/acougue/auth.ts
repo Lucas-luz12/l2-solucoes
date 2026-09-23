@@ -1,5 +1,8 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { cookies, headers } from "next/headers";
+import { hashPassword, verifyPassword } from "@/lib/security/password";
+
+export { hashPassword, verifyPassword };
 
 const COOKIE = "l2_reserva";
 const MAX_AGE = 60 * 60 * 24 * 30;
@@ -11,19 +14,6 @@ export type Session = {
 
 function secret() {
   return process.env.ACOUGUE_SESSION_SECRET || "l2-reserva-demonstracao";
-}
-
-export function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 32).toString("hex");
-  return { hash, salt };
-}
-
-export function verifyPassword(password: string, hash: string, salt: string) {
-  const actual = scryptSync(password, salt, 32);
-  const expected = Buffer.from(hash, "hex");
-  if (expected.length !== actual.length) return false;
-  return timingSafeEqual(actual, expected);
 }
 
 function sign(payload: string) {
@@ -63,10 +53,13 @@ export async function readSession() {
 }
 
 export async function setSessionCookie(session: Session) {
+  const headerStore = await headers();
+  const secure = headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim() === "https";
   const jar = await cookies();
   jar.set(COOKIE, encodeSession(session), {
     httpOnly: true,
     sameSite: "lax",
+    secure,
     path: "/",
     maxAge: MAX_AGE,
   });

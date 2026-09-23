@@ -28,6 +28,7 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -78,6 +79,7 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
           pickupDate: date,
           slot,
           notes,
+          privacyAccepted: accepted,
           slug: catalog.shop.slug,
           items: lines.map((line) => ({ itemId: line.item.id, quantity: line.quantity })),
         }),
@@ -236,8 +238,24 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
               Algum item passou do que ainda cabe neste dia. Diminua a quantidade.
             </p>
           ) : null}
+          <label className="mt-4 flex items-start gap-2 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={accepted}
+              onChange={(event) => setAccepted(event.target.checked)}
+              required
+            />
+            <span>
+              Concordo em informar nome e WhatsApp para o açougue organizar esta retirada. Os dados pessoais saem 30 dias
+              depois da data marcada.{" "}
+              <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+                Aviso de privacidade
+              </Link>
+            </span>
+          </label>
           {error ? <p className="mt-3 text-sm text-[#9a4d45]">{error}</p> : null}
-          <button type="submit" className={`${primaryButtonClass} mt-4 w-full`} disabled={busy || lines.length === 0}>
+          <button type="submit" className={`${primaryButtonClass} mt-4 w-full`} disabled={busy || lines.length === 0 || !accepted}>
             Reservar retirada
           </button>
           <p className="mt-3 text-xs leading-relaxed text-muted">{catalog.shop.pickupNote}</p>

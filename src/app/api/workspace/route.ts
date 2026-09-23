@@ -1,8 +1,10 @@
+import { readPropostaSession } from "@/lib/proposta/auth";
 import {
   deleteClient,
   deleteProposal,
   duplicateProposal,
   getWorkspace,
+  presentWorkspace,
   resetWorkspace,
   saveClient,
   saveCompany,
@@ -10,7 +12,7 @@ import {
   sendProposal,
   StoreError,
 } from "@/lib/proposta/store";
-import type { ClientInput, Company, ProposalInput } from "@/lib/proposta/types";
+import type { ClientInput, Company, ProposalInput, Workspace } from "@/lib/proposta/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,10 +25,24 @@ function fail(error: unknown) {
   return Response.json({ error: "Não foi possível concluir agora." }, { status: 500 });
 }
 
+function jsonWorkspace<T extends { workspace: Workspace }>(payload: T) {
+  return Response.json({ ...payload, workspace: presentWorkspace(payload.workspace) });
+}
+
+async function requireOperator() {
+  const session = await readPropostaSession();
+  if (!session) throw new StoreError("Entre na conta da empresa.", 401);
+  const workspace = await getWorkspace();
+  if (workspace.operator?.email !== session.email) {
+    throw new StoreError("Entre na conta da empresa.", 401);
+  }
+}
+
 export async function GET() {
   try {
+    await requireOperator();
     const workspace = await getWorkspace();
-    return Response.json({ workspace });
+    return jsonWorkspace({ workspace });
   } catch (error) {
     return fail(error);
   }
@@ -49,45 +65,46 @@ export async function POST(request: Request) {
   }
 
   try {
+    await requireOperator();
     switch (body.action) {
       case "save-company": {
         if (!body.company) return Response.json({ error: "Dados da empresa ausentes." }, { status: 400 });
         const workspace = await saveCompany(body.company);
-        return Response.json({ workspace });
+        return jsonWorkspace({ workspace });
       }
       case "save-client": {
         if (!body.client) return Response.json({ error: "Dados do cliente ausentes." }, { status: 400 });
         const result = await saveClient(body.client);
-        return Response.json(result);
+        return jsonWorkspace(result);
       }
       case "delete-client": {
         if (!body.id) return Response.json({ error: "Cliente ausente." }, { status: 400 });
         const workspace = await deleteClient(body.id);
-        return Response.json({ workspace });
+        return jsonWorkspace({ workspace });
       }
       case "save-proposal": {
         if (!body.proposal) return Response.json({ error: "Dados da proposta ausentes." }, { status: 400 });
         const result = await saveProposal(body.proposal);
-        return Response.json(result);
+        return jsonWorkspace(result);
       }
       case "delete-proposal": {
         if (!body.id) return Response.json({ error: "Proposta ausente." }, { status: 400 });
         const workspace = await deleteProposal(body.id);
-        return Response.json({ workspace });
+        return jsonWorkspace({ workspace });
       }
       case "send-proposal": {
         if (!body.id) return Response.json({ error: "Proposta ausente." }, { status: 400 });
         const result = await sendProposal(body.id);
-        return Response.json(result);
+        return jsonWorkspace(result);
       }
       case "duplicate-proposal": {
         if (!body.id) return Response.json({ error: "Proposta ausente." }, { status: 400 });
         const result = await duplicateProposal(body.id);
-        return Response.json(result);
+        return jsonWorkspace(result);
       }
       case "reset": {
         const workspace = await resetWorkspace();
-        return Response.json({ workspace });
+        return jsonWorkspace({ workspace });
       }
       default:
         return Response.json({ error: "Ação desconhecida." }, { status: 400 });

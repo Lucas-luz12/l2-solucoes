@@ -24,7 +24,7 @@ const NEXT_STATUS: Partial<Record<ReservationStatus, { status: ReservationStatus
 };
 
 export function PrepBoard() {
-  const { data, setStatus } = useAcougue();
+  const { data, setStatus, deleteReservation } = useAcougue();
   const today = saoPauloToday();
   const dates = upcomingDates(7, today);
   const [date, setDate] = useState(today);
@@ -37,12 +37,25 @@ export function PrepBoard() {
   );
   const stats = dayStats(data.reservations, date);
   const reservations = data.reservations
-    .filter((reservation) => reservation.pickupDate === date && reservation.status !== "cancelada")
+    .filter((reservation) => reservation.pickupDate === date)
     .sort((a, b) => {
       const slot = data.shop.slots.indexOf(a.slot) - data.shop.slots.indexOf(b.slot);
       if (slot !== 0) return slot;
       return a.customerName.localeCompare(b.customerName, "pt-BR");
     });
+
+  async function remove(id: string) {
+    if (!window.confirm("Apagar nome, WhatsApp e o pedido desta reserva?")) return;
+    setBusyId(id);
+    setError(null);
+    try {
+      await deleteReservation(id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível apagar.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function update(id: string, status: ReservationStatus) {
     setBusyId(id);
@@ -139,6 +152,7 @@ export function PrepBoard() {
               shopName={data.shop.name}
               busy={busyId === reservation.id}
               onStatus={(status) => update(reservation.id, status)}
+              onDelete={() => remove(reservation.id)}
             />
           ))}
         </ul>
@@ -152,11 +166,13 @@ function ReservationCard({
   shopName,
   busy,
   onStatus,
+  onDelete,
 }: {
   reservation: Reservation;
   shopName: string;
   busy: boolean;
   onStatus: (status: ReservationStatus) => void;
+  onDelete: () => void;
 }) {
   const next = NEXT_STATUS[reservation.status];
   const message = [
@@ -210,6 +226,9 @@ function ReservationCard({
               WhatsApp
             </a>
           ) : null}
+          <button type="button" className="px-3 py-2 text-sm text-muted hover:text-ink" disabled={busy} onClick={onDelete}>
+            Apagar dados
+          </button>
         </div>
       </div>
     </li>

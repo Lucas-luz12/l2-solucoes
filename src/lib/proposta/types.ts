@@ -54,12 +54,20 @@ export type Proposal = {
   respondedAt: string | null;
   responseName: string | null;
   responseNote: string | null;
+  privacyAcceptedAt?: string | null;
+};
+
+export type Operator = {
+  email: string;
+  passwordHash: string;
+  passwordSalt: string;
 };
 
 export type Workspace = {
   company: Company;
   clients: Client[];
   proposals: Proposal[];
+  operator?: Operator;
 };
 
 export type ClientInput = {
