@@ -50,6 +50,14 @@ export function Hero() {
             Ver serviços
           </a>
         </div>
+        <div className="animate-rise-delay-3 mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-medium">
+          <a href="/acougue" className="text-accent transition-colors hover:text-accent-bright">
+            Reservas para açougue
+          </a>
+          <a href="/proposta" className="text-ink-soft transition-colors hover:text-accent">
+            L² Proposta
+          </a>
+        </div>
       </div>
     </section>
   );

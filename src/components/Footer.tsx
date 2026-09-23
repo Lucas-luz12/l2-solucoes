@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Wordmark } from "./Wordmark";
 
 export function Footer() {
@@ -12,9 +13,18 @@ export function Footer() {
             Tecnologia · Processos · Resultados
           </p>
         </div>
-        <p className="text-sm text-muted">
-          © {year} L² Soluções. Todos os direitos reservados.
-        </p>
+        <div className="flex flex-col gap-2 text-sm text-muted md:items-end">
+          <Link href="/acougue" className="font-medium text-accent hover:text-accent-bright">
+            L² Reserva
+          </Link>
+          <Link href="/proposta" className="hover:text-accent">
+            L² Proposta
+          </Link>
+          <Link href="/privacidade" className="hover:text-accent">
+            Privacidade
+          </Link>
+          <p>© {year} L² Soluções. Todos os direitos reservados.</p>
+        </div>
       </div>
     </footer>
   );

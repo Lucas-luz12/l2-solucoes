@@ -1,0 +1,395 @@
+import { addCalendarDays, saoPauloToday, timestampOn } from "@/lib/proposta/dates";
+import { hashPassword } from "./auth";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./demo";
+import type { AcougueData, Database, Reservation } from "./types";
+
+export { DEMO_EMAIL, DEMO_PASSWORD };
+
+function reservation(
+  partial: Omit<Reservation, "createdAt"> & { createdAt?: string },
+  when: string,
+): Reservation {
+  return { ...partial, createdAt: partial.createdAt ?? timestampOn(when, 9) };
+}
+
+export function createSeed(now = new Date()): AcougueData {
+  const today = saoPauloToday(now);
+  const tomorrow = addCalendarDays(today, 1);
+
+  return {
+    shop: {
+      id: "shop_estrela",
+      slug: "estrela",
+      logoUrl: "/acougue/estrela-logo.png",
+      name: "Açougue Estrela",
+      tagline: "Promoção com reserva e retirada no balcão",
+      address: "Rua das Pitangueiras, 240",
+      city: "São Paulo, SP",
+      phone: "(11) 3333-2400",
+      whatsapp: "(11) 98800-2210",
+      hours: "Terça a sábado, 8h–18h. Domingo, 8h–12h.",
+      pickupNote:
+        "A reserva segura o pedido até o fim do horário escolhido. Depois disso a peça pode voltar para a vitrine.",
+      slots: ["09h–11h", "11h–13h", "16h–18h30"],
+    },
+    items: [
+      {
+        id: "kit_churrasco",
+        photoUrl: "/acougue/kit-churrasco.png",
+        kind: "kit",
+        name: "Kit churrasco família",
+        description: "Picanha 1 kg, linguiça toscana 800 g, sobrecoxa 1 kg e pão de alho.",
+        priceCents: 18_990,
+        unit: "un",
+        serves: "6 pessoas",
+        prepNote: "Bandeja com a picanha inteira, linguiça e sobrecoxa. Pão de alho à parte.",
+        active: true,
+        promo: true,
+        dailyCap: 15,
+        sort: 1,
+      },
+      {
+        id: "kit_feijoada",
+        photoUrl: "/acougue/kit-feijoada.png",
+        kind: "kit",
+        name: "Kit feijoada",
+        description: "Costela, linguiça, carne seca e lombo, porção para a panela.",
+        priceCents: 9_600,
+        unit: "un",
+        serves: "5 pessoas",
+        prepNote: "Separar os cortes já porcionados no saco da feijoada.",
+        active: true,
+        promo: true,
+        dailyCap: 12,
+        sort: 2,
+      },
+      {
+        id: "kit_costela",
+        photoUrl: "/acougue/kit-costela.png",
+        kind: "kit",
+        name: "Kit costela",
+        description: "Costela em tira, cerca de 2,5 kg, pronta para o bafo ou a brasa.",
+        priceCents: 14_900,
+        unit: "un",
+        serves: "4 pessoas",
+        prepNote: "Peça inteira. Não fatiar.",
+        active: true,
+        promo: false,
+        dailyCap: 8,
+        sort: 3,
+      },
+      {
+        id: "corte_picanha",
+        photoUrl: "/acougue/corte-picanha.png",
+        kind: "corte",
+        name: "Picanha",
+        description: "Peça para churrasco. A reserva é em quilos.",
+        priceCents: 7_990,
+        unit: "kg",
+        serves: "",
+        prepNote: "Reservar peças inteiras. Só fatiar se o cliente pedir na observação.",
+        active: true,
+        promo: true,
+        dailyCap: 40,
+        sort: 4,
+      },
+      {
+        id: "corte_cupim",
+        photoUrl: "/acougue/corte-cupim.png",
+        kind: "corte",
+        name: "Cupim",
+        description: "Peça para assar inteira.",
+        priceCents: 4_290,
+        unit: "kg",
+        serves: "",
+        prepNote: "Peça inteira, com a gordura.",
+        active: true,
+        promo: false,
+        dailyCap: 25,
+        sort: 5,
+      },
+      {
+        id: "corte_linguica",
+        photoUrl: "/acougue/corte-linguica.png",
+        kind: "corte",
+        name: "Linguiça toscana",
+        description: "Para a brasa. Reserva em quilos.",
+        priceCents: 2_890,
+        unit: "kg",
+        serves: "",
+        prepNote: "Pacote fechado no peso pedido.",
+        active: true,
+        promo: false,
+        dailyCap: 30,
+        sort: 6,
+      },
+      {
+        id: "corte_moida",
+        photoUrl: "/acougue/corte-moida.png",
+        kind: "corte",
+        name: "Carne moída",
+        description: "Acém moído na hora, no dia da retirada.",
+        priceCents: 3_290,
+        unit: "kg",
+        serves: "",
+        prepNote: "Moer no dia da retirada. Não antecipar.",
+        active: true,
+        promo: false,
+        dailyCap: 20,
+        sort: 7,
+      },
+    ],
+    reservations: [
+      reservation(
+        {
+          id: "res_marina",
+          code: "ESTRELA1",
+          customerName: "Marina Alves",
+          phone: "(11) 98821-4400",
+          pickupDate: today,
+          slot: "09h–11h",
+          notes: "",
+          status: "reservada",
+          items: [
+            {
+              itemId: "kit_churrasco",
+              name: "Kit churrasco família",
+              kind: "kit",
+              unit: "un",
+              quantity: 1,
+              priceCents: 18_990,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_paulo",
+          code: "ESTRELA2",
+          customerName: "Paulo Nogueira",
+          phone: "(11) 98770-1144",
+          pickupDate: today,
+          slot: "11h–13h",
+          notes: "Um dos kits sem pão de alho.",
+          status: "separada",
+          items: [
+            {
+              itemId: "kit_churrasco",
+              name: "Kit churrasco família",
+              kind: "kit",
+              unit: "un",
+              quantity: 2,
+              priceCents: 18_990,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_helena",
+          code: "ESTRELA3",
+          customerName: "Helena Duarte",
+          phone: "(11) 98440-2291",
+          pickupDate: today,
+          slot: "11h–13h",
+          notes: "Picanha em peça inteira.",
+          status: "reservada",
+          items: [
+            {
+              itemId: "corte_picanha",
+              name: "Picanha",
+              kind: "corte",
+              unit: "kg",
+              quantity: 2.5,
+              priceCents: 7_990,
+            },
+            {
+              itemId: "corte_linguica",
+              name: "Linguiça toscana",
+              kind: "corte",
+              unit: "kg",
+              quantity: 1,
+              priceCents: 2_890,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_ricardo",
+          code: "ESTRELA4",
+          customerName: "Ricardo Penteado",
+          phone: "(11) 99120-8833",
+          pickupDate: today,
+          slot: "16h–18h30",
+          notes: "",
+          status: "pronta",
+          items: [
+            {
+              itemId: "kit_feijoada",
+              name: "Kit feijoada",
+              kind: "kit",
+              unit: "un",
+              quantity: 1,
+              priceCents: 9_600,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_joao",
+          code: "ESTRELA5",
+          customerName: "João Ferraz",
+          phone: "(11) 99910-7720",
+          pickupDate: today,
+          slot: "16h–18h30",
+          notes: "",
+          status: "reservada",
+          items: [
+            {
+              itemId: "kit_costela",
+              name: "Kit costela",
+              kind: "kit",
+              unit: "un",
+              quantity: 1,
+              priceCents: 14_900,
+            },
+            {
+              itemId: "corte_cupim",
+              name: "Cupim",
+              kind: "corte",
+              unit: "kg",
+              quantity: 1.5,
+              priceCents: 4_290,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_ana",
+          code: "ESTRELA6",
+          customerName: "Ana Luz",
+          phone: "(11) 98888-1001",
+          pickupDate: today,
+          slot: "09h–11h",
+          notes: "",
+          status: "retirada",
+          items: [
+            {
+              itemId: "corte_moida",
+              name: "Carne moída",
+              kind: "corte",
+              unit: "kg",
+              quantity: 2,
+              priceCents: 3_290,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_carlos",
+          code: "ESTRELA7",
+          customerName: "Carlos Mendes",
+          phone: "(11) 97770-2210",
+          pickupDate: today,
+          slot: "09h–11h",
+          notes: "Desistiu de manhã.",
+          status: "cancelada",
+          items: [
+            {
+              itemId: "kit_churrasco",
+              name: "Kit churrasco família",
+              kind: "kit",
+              unit: "un",
+              quantity: 1,
+              priceCents: 18_990,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_bia",
+          code: "ESTRELA8",
+          customerName: "Bia Carvalho",
+          phone: "(11) 99660-4412",
+          pickupDate: tomorrow,
+          slot: "11h–13h",
+          notes: "",
+          status: "reservada",
+          items: [
+            {
+              itemId: "kit_churrasco",
+              name: "Kit churrasco família",
+              kind: "kit",
+              unit: "un",
+              quantity: 3,
+              priceCents: 18_990,
+            },
+          ],
+        },
+        today,
+      ),
+      reservation(
+        {
+          id: "res_diego",
+          code: "ESTRELA9",
+          customerName: "Diego Ramos",
+          phone: "(11) 99551-8080",
+          pickupDate: tomorrow,
+          slot: "16h–18h30",
+          notes: "",
+          status: "reservada",
+          items: [
+            {
+              itemId: "kit_feijoada",
+              name: "Kit feijoada",
+              kind: "kit",
+              unit: "un",
+              quantity: 2,
+              priceCents: 9_600,
+            },
+            {
+              itemId: "corte_picanha",
+              name: "Picanha",
+              kind: "corte",
+              unit: "kg",
+              quantity: 1,
+              priceCents: 7_990,
+            },
+          ],
+        },
+        today,
+      ),
+    ],
+  };
+}
+
+export function createDatabase(now = new Date()): Database {
+  const shop = createSeed(now);
+  const password = hashPassword(DEMO_PASSWORD);
+  return {
+    accounts: [
+      {
+        id: "acc_estrela",
+        email: DEMO_EMAIL,
+        ownerName: "Açougue Estrela",
+        passwordHash: password.hash,
+        passwordSalt: password.salt,
+        shopId: shop.shop.id,
+        createdAt: timestampOn(saoPauloToday(now), 8),
+      },
+    ],
+    shops: [shop],
+  };
+}

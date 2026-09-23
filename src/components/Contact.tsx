@@ -1,10 +1,19 @@
+import Link from "next/link";
+
 const CONTACT_EMAIL = "contato@l2solucoes.com.br";
 
 type ContactProps = {
   sent?: boolean;
+  interest?: string;
 };
 
-export function Contact({ sent = false }: ContactProps) {
+export function Contact({ sent = false, interest }: ContactProps) {
+  const defaultMessage =
+    interest === "acougue"
+      ? "Quero o L² Reserva no meu açougue, no lugar da reserva por WhatsApp."
+      : interest === "proposta"
+        ? "Quero usar o L² Proposta na minha empresa."
+        : "";
   return (
     <section id="contato" className="bg-surface py-24 md:py-32">
       <div className="mx-auto max-w-6xl px-6 md:px-8">
@@ -96,8 +105,18 @@ export function Contact({ sent = false }: ContactProps) {
                   rows={4}
                   className="w-full resize-y rounded-md border border-line bg-surface-elevated px-4 py-3 text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
                   placeholder="O que você precisa construir?"
+                  defaultValue={defaultMessage}
                 />
               </div>
+              <label className="flex items-start gap-2 text-sm text-ink-soft">
+                <input type="checkbox" name="privacidade" value="sim" required className="mt-1" />
+                <span>
+                  Concordo em enviar nome, e-mail e mensagem para a L² responder este contato.{" "}
+                  <Link href="/privacidade" className="font-medium text-accent hover:text-accent-bright">
+                    Aviso de privacidade
+                  </Link>
+                </span>
+              </label>
               <button
                 type="submit"
                 className="w-full rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-bright sm:w-auto"

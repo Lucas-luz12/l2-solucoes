@@ -1,13 +1,15 @@
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { Services } from "@/components/Services";
-import { Downloads } from "@/components/Downloads";
+import { Product } from "@/components/Product";
 import { Approach } from "@/components/Approach";
 import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
 
+export const dynamic = "force-dynamic";
+
 type HomeProps = {
-  searchParams?: Promise<{ contato?: string }>;
+  searchParams?: Promise<{ contato?: string; interesse?: string }>;
 };
 
 export default async function Home({ searchParams }: HomeProps) {
@@ -20,9 +22,9 @@ export default async function Home({ searchParams }: HomeProps) {
       <main className="flex-1">
         <Hero />
         <Services />
-        <Downloads />
+        <Product />
         <Approach />
-        <Contact sent={sent} />
+        <Contact sent={sent} interest={params.interesse} />
       </main>
       <Footer />
     </>
