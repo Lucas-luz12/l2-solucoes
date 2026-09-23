@@ -135,11 +135,11 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-8 md:px-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div>
+      <div className="mx-auto grid min-w-0 max-w-6xl gap-10 px-4 py-8 md:px-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0">
           <div>
             <p className="text-sm font-medium text-ink-soft">Retirar</p>
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            <div className="mt-2 flex min-w-0 gap-2 overflow-x-auto pb-1">
               {dates.map((day) => (
                 <button
                   key={day}
@@ -162,7 +162,7 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
           <CatalogGroup title="Cortes por quilo" items={cortes} cart={cart} date={date} booked={catalog.booked} onChange={changeQty} />
         </div>
 
-        <form onSubmit={submit} className="h-fit rounded-md border border-line bg-white p-5 lg:sticky lg:top-6">
+        <form onSubmit={submit} className="h-fit min-w-0 rounded-md border border-line bg-white p-5 lg:sticky lg:top-6">
           <h2 className="font-display text-xl font-semibold text-ink">Sua reserva</h2>
           {lines.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Escolha um kit ou um corte. O açougue separa para o horário marcado.</p>
