@@ -5,6 +5,9 @@ export type ItemKind = "kit" | "corte";
 export type ReservationStatus = "reservada" | "separada" | "pronta" | "retirada" | "cancelada";
 
 export type Shop = {
+  id: string;
+  slug: string;
+  logoUrl: string | null;
   name: string;
   tagline: string;
   address: string;
@@ -30,6 +33,7 @@ export type CatalogItem = {
   /** Teto do dia, na mesma unidade do item. Null não limita. */
   dailyCap: number | null;
   sort: number;
+  photoUrl: string | null;
 };
 
 export type ReservationLine = {
@@ -60,7 +64,23 @@ export type AcougueData = {
   reservations: Reservation[];
 };
 
+export type Account = {
+  id: string;
+  email: string;
+  ownerName: string;
+  passwordHash: string;
+  passwordSalt: string;
+  shopId: string;
+  createdAt: string;
+};
+
+export type Database = {
+  accounts: Account[];
+  shops: AcougueData[];
+};
+
 export type ReservationInput = {
+  slug: string;
   customerName: string;
   phone: string;
   pickupDate: string;
@@ -81,6 +101,7 @@ export type CatalogInput = {
   active: boolean;
   promo: boolean;
   dailyCap: number | null;
+  photoUrl: string | null;
 };
 
 export type PublicCatalog = {

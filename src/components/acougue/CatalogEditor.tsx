@@ -5,6 +5,8 @@ import { centsToInput, formatBRL, parseMoneyToCents } from "@/lib/acougue/presen
 import type { CatalogItem, ItemKind, Unit } from "@/lib/acougue/types";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/proposta/ui";
 import { useAcougue } from "./AcougueProvider";
+import { ShopImage } from "./ShopImage";
+import { uploadShopImage } from "./upload";
 
 type Draft = {
   id: string;
@@ -18,6 +20,7 @@ type Draft = {
   active: boolean;
   promo: boolean;
   dailyCap: string;
+  photoUrl: string | null;
 };
 
 function emptyDraft(): Draft {
@@ -33,6 +36,7 @@ function emptyDraft(): Draft {
     active: true,
     promo: true,
     dailyCap: "",
+    photoUrl: null,
   };
 }
 
@@ -49,6 +53,7 @@ function fromItem(item: CatalogItem): Draft {
     active: item.active,
     promo: item.promo,
     dailyCap: item.dailyCap == null ? "" : String(item.dailyCap).replace(".", ","),
+    photoUrl: item.photoUrl,
   };
 }
 
@@ -85,6 +90,7 @@ export function CatalogEditor() {
         active: draft.active,
         promo: draft.promo,
         dailyCap,
+        photoUrl: draft.photoUrl,
       });
       setMessage(draft.id ? "Item atualizado na vitrine." : "Item incluído na vitrine.");
       if (!draft.id) setDraft(null);
@@ -124,8 +130,16 @@ export function CatalogEditor() {
                   setDraft(fromItem(item));
                   setMessage(null);
                 }}
-                className="flex w-full items-baseline justify-between gap-4 py-4 text-left"
+                className="flex w-full items-center justify-between gap-4 py-4 text-left"
               >
+                <span className="flex min-w-0 items-center gap-3">
+                  {item.photoUrl ? (
+                    <ShopImage src={item.photoUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
+                  ) : (
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface font-display text-lg text-ink-soft">
+                      {item.name.slice(0, 1)}
+                    </span>
+                  )}
                 <span>
                   <span className="font-medium text-ink">{item.name}</span>
                   <span className="mt-1 block text-sm text-muted">
@@ -134,6 +148,7 @@ export function CatalogEditor() {
                     {item.active ? "" : " · fora da vitrine"}
                     {item.dailyCap != null ? ` · limite ${item.dailyCap} ${item.unit}/dia` : ""}
                   </span>
+                </span>
                 </span>
                 <span className="shrink-0 text-sm font-medium text-ink">
                   {formatBRL(item.priceCents)}
@@ -147,6 +162,48 @@ export function CatalogEditor() {
         {draft ? (
           <form onSubmit={onSubmit} className="h-fit space-y-3 rounded-md border border-line bg-white p-5">
             <h2 className="font-display text-lg font-semibold text-ink">{draft.id ? "Editar item" : "Novo item"}</h2>
+            <div>
+              <p className="text-sm font-medium text-ink-soft">Foto</p>
+              <div className="mt-2 flex items-center gap-3">
+                {draft.photoUrl ? (
+                  <ShopImage src={draft.photoUrl} alt="" className="h-16 w-16 rounded-md object-cover" />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-md bg-surface text-sm text-muted">
+                    Sem foto
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <label className={`${secondaryButtonClass} cursor-pointer`}>
+                    Enviar foto
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (!file) return;
+                        setBusy(true);
+                        setMessage(null);
+                        try {
+                          const photoUrl = await uploadShopImage(file);
+                          setDraft((current) => (current ? { ...current, photoUrl } : current));
+                        } catch (reason) {
+                          setMessage(reason instanceof Error ? reason.message : "Não foi possível enviar a foto.");
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  {draft.photoUrl ? (
+                    <button type="button" className={secondaryButtonClass} onClick={() => setDraft({ ...draft, photoUrl: null })}>
+                      Remover
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
             <label className="block text-sm font-medium text-ink-soft">
               Nome
               <input

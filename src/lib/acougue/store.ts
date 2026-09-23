@@ -2,12 +2,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { addCalendarDays, saoPauloToday } from "@/lib/proposta/dates";
+import { hashPassword, verifyPassword } from "./auth";
 import { normalizeQuantity } from "./present";
-import { createSeed } from "./seed";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./demo";
+import { createDatabase, createSeed } from "./seed";
 import type {
   AcougueData,
   CatalogInput,
   CatalogItem,
+  Database,
   PublicCatalog,
   Reservation,
   ReservationInput,
@@ -19,7 +22,19 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "acougue.json");
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-let memory: AcougueData | null = null;
+export const RESERVED_SLUGS = new Set(["painel", "entrar", "criar", "r", "conta", "midia", "api"]);
+
+const SEED_PHOTOS: Record<string, string> = {
+  kit_churrasco: "/acougue/kit-churrasco.png",
+  kit_feijoada: "/acougue/kit-feijoada.png",
+  kit_costela: "/acougue/kit-costela.png",
+  corte_picanha: "/acougue/corte-picanha.png",
+  corte_cupim: "/acougue/corte-cupim.png",
+  corte_linguica: "/acougue/corte-linguica.png",
+  corte_moida: "/acougue/corte-moida.png",
+};
+
+let memory: Database | null = null;
 let persistent = true;
 let ready: Promise<void> | null = null;
 let chain: Promise<unknown> = Promise.resolve();
@@ -53,29 +68,119 @@ async function ensureStorage() {
       persistent = true;
     } catch {
       persistent = false;
-      memory = createSeed();
+      memory = createDatabase();
     }
   })();
   return ready;
 }
 
-async function readData(): Promise<AcougueData> {
+function isDatabase(value: unknown): value is Database {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Database;
+  return Array.isArray(record.accounts) && Array.isArray(record.shops);
+}
+
+function safeMediaUrl(url: string | null | undefined, shopId: string) {
+  if (!url) return null;
+  const value = url.trim();
+  if (value.includes("..") || value.includes("\\") || value.includes("?")) return null;
+  if (/^\/acougue\/[a-z0-9-]+\.(png|jpe?g|webp)$/i.test(value)) return value;
+  const prefix = `/api/acougue/midia/${shopId}/`;
+  if (!value.startsWith(prefix)) return null;
+  const file = value.slice(prefix.length);
+  if (/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(file)) return value;
+  return null;
+}
+
+function normalizeShop(shop: Partial<Shop> | undefined, fallback: Shop): Shop {
+  const source = shop ?? {};
+  const id = source.id || fallback.id;
+  const slug = source.slug || fallback.slug;
+  const rawLogo = source.logoUrl === undefined ? (slug === "estrela" ? fallback.logoUrl : null) : source.logoUrl;
+  return {
+    id,
+    slug,
+    logoUrl: safeMediaUrl(rawLogo, id),
+    name: source.name || fallback.name,
+    tagline: source.tagline ?? fallback.tagline,
+    address: source.address ?? "",
+    city: source.city ?? "",
+    phone: source.phone ?? "",
+    whatsapp: source.whatsapp ?? "",
+    hours: source.hours ?? "",
+    pickupNote: source.pickupNote || fallback.pickupNote,
+    slots: Array.isArray(source.slots) && source.slots.length > 0 ? source.slots : fallback.slots,
+  };
+}
+
+function migrateLegacy(raw: Partial<AcougueData>): Database {
+  const seed = createSeed();
+  const shop = normalizeShop(raw.shop, seed.shop);
+  const items = (raw.items ?? seed.items).map((item) => ({
+    ...item,
+    photoUrl: item.photoUrl ? safeMediaUrl(item.photoUrl, shop.id) ?? SEED_PHOTOS[item.id] ?? null : SEED_PHOTOS[item.id] ?? null,
+  }));
+  const password = hashPassword(DEMO_PASSWORD);
+  return {
+    accounts: [
+      {
+        id: "acc_estrela",
+        email: DEMO_EMAIL,
+        ownerName: shop.name || "Açougue Estrela",
+        passwordHash: password.hash,
+        passwordSalt: password.salt,
+        shopId: shop.id,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    shops: [
+      {
+        shop,
+        items,
+        reservations: raw.reservations ?? [],
+      },
+    ],
+  };
+}
+
+function normalizeDatabase(data: Database): Database {
+  const seed = createSeed();
+  return {
+    accounts: data.accounts ?? [],
+    shops: (data.shops ?? []).map((entry) => {
+      const shop = normalizeShop(entry.shop, { ...seed.shop, id: entry.shop?.id || randomUUID(), slug: entry.shop?.slug || "acougue" });
+      return {
+        shop,
+        items: (entry.items ?? []).map((item) => ({
+          ...item,
+          photoUrl: safeMediaUrl(item.photoUrl, shop.id),
+        })),
+        reservations: entry.reservations ?? [],
+      };
+    }),
+  };
+}
+
+async function readData(): Promise<Database> {
   await ensureStorage();
   if (!persistent) {
-    memory ??= createSeed();
+    memory ??= createDatabase();
     return structuredClone(memory);
   }
   try {
-    const raw = await readFile(DATA_FILE, "utf8");
-    return JSON.parse(raw) as AcougueData;
+    const raw = JSON.parse(await readFile(DATA_FILE, "utf8")) as unknown;
+    if (isDatabase(raw)) return normalizeDatabase(raw);
+    const migrated = migrateLegacy(raw as Partial<AcougueData>);
+    await writeData(migrated);
+    return migrated;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") return createSeed();
+    if (code === "ENOENT") return createDatabase();
     throw error;
   }
 }
 
-async function writeData(data: AcougueData) {
+async function writeData(data: Database) {
   await ensureStorage();
   if (!persistent) {
     memory = structuredClone(data);
@@ -106,6 +211,45 @@ function requireText(value: string, label: string, min: number, max: number) {
   return text;
 }
 
+function findShop(data: Database, shopId: string) {
+  const shop = data.shops.find((entry) => entry.shop.id === shopId);
+  if (!shop) throw new StoreError("Açougue não encontrado.", 404);
+  return shop;
+}
+
+function findShopBySlug(data: Database, slug: string) {
+  const shop = data.shops.find((entry) => entry.shop.slug === slug);
+  if (!shop) throw new StoreError("Açougue não encontrado.", 404);
+  return shop;
+}
+
+export function isReservedSlug(slug: string) {
+  return RESERVED_SLUGS.has(slug);
+}
+
+function slugify(name: string) {
+  const base = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return base || "acougue";
+}
+
+function uniqueSlug(data: Database, name: string) {
+  const base = slugify(name);
+  let candidate = RESERVED_SLUGS.has(base) ? `${base}-loja` : base;
+  let suffix = 2;
+  const taken = new Set(data.shops.map((entry) => entry.shop.slug));
+  while (taken.has(candidate) || RESERVED_SLUGS.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
 function makeCode(existing: Set<string>) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const bytes = randomBytes(6);
@@ -116,10 +260,9 @@ function makeCode(existing: Set<string>) {
   throw new StoreError("Não foi possível gerar o código da reserva.");
 }
 
-function bookedQty(data: AcougueData, date: string, itemId: string, exceptId?: string) {
+function bookedQty(data: AcougueData, date: string, itemId: string) {
   return data.reservations.reduce((sum, reservation) => {
     if (reservation.pickupDate !== date || reservation.status === "cancelada") return sum;
-    if (exceptId && reservation.id === exceptId) return sum;
     const quantity = reservation.items
       .filter((item) => item.itemId === itemId)
       .reduce((lineSum, item) => lineSum + item.quantity, 0);
@@ -133,12 +276,7 @@ function normalizeCap(cap: number, unit: "un" | "kg") {
   return Math.round(cap * 10) / 10;
 }
 
-export async function getAcougue() {
-  return withLock(readData);
-}
-
-export async function getPublicCatalog(): Promise<PublicCatalog> {
-  const data = await getAcougue();
+function publicCatalog(data: AcougueData): PublicCatalog {
   const today = saoPauloToday();
   const last = addCalendarDays(today, 13);
   const booked: PublicCatalog["booked"] = {};
@@ -158,50 +296,152 @@ export async function getPublicCatalog(): Promise<PublicCatalog> {
   };
 }
 
-export async function getReservationByCode(code: string) {
-  const data = await getAcougue();
-  const reservation = data.reservations.find((item) => item.code.toLowerCase() === code.toLowerCase());
-  if (!reservation) throw new StoreError("Reserva não encontrada.", 404);
-  return { shop: data.shop, reservation };
+export async function getShop(shopId: string) {
+  return withLock(async () => findShop(await readData(), shopId));
 }
 
-export async function resetAcougue() {
+export async function getPublicCatalog(slug: string): Promise<PublicCatalog> {
+  return withLock(async () => publicCatalog(findShopBySlug(await readData(), slug)));
+}
+
+export async function getReservationByCode(slug: string, code: string) {
   return withLock(async () => {
-    const data = createSeed();
-    await writeData(data);
-    return data;
+    const data = findShopBySlug(await readData(), slug);
+    const reservation = data.reservations.find((item) => item.code.toLowerCase() === code.toLowerCase());
+    if (!reservation) throw new StoreError("Reserva não encontrada.", 404);
+    return { shop: data.shop, reservation };
   });
 }
 
-export async function saveShop(input: Shop) {
+export async function findReservation(code: string) {
+  return withLock(async () => {
+    const database = await readData();
+    for (const entry of database.shops) {
+      const reservation = entry.reservations.find((item) => item.code.toLowerCase() === code.toLowerCase());
+      if (reservation) return { shop: entry.shop, reservation };
+    }
+    return null;
+  });
+}
+
+export type RegisterInput = {
+  ownerName: string;
+  email: string;
+  password: string;
+  shopName: string;
+};
+
+export async function registerAccount(input: RegisterInput) {
   return withLock(async () => {
     const data = await readData();
+    const ownerName = requireText(input.ownerName ?? "", "O seu nome", 2, 80);
+    const shopName = requireText(input.shopName ?? "", "O nome do açougue", 2, 80);
+    const email = clean(input.email ?? "", 120).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new StoreError("Informe um e-mail válido.");
+    if (data.accounts.some((account) => account.email === email)) {
+      throw new StoreError("Já existe uma conta com este e-mail.");
+    }
+    const password = input.password ?? "";
+    if (password.length < 8 || password.length > 200) {
+      throw new StoreError("A senha precisa ter pelo menos 8 caracteres.");
+    }
+    const shopId = `shop_${randomUUID()}`;
+    const passwordRecord = hashPassword(password);
+    const shop: Shop = {
+      id: shopId,
+      slug: uniqueSlug(data, shopName),
+      logoUrl: null,
+      name: shopName,
+      tagline: "Reserve e retire no balcão",
+      address: "",
+      city: "",
+      phone: "",
+      whatsapp: "",
+      hours: "",
+      pickupNote:
+        "A reserva segura o pedido até o fim do horário escolhido. O pagamento é feito na retirada.",
+      slots: ["09h–11h", "11h–13h", "16h–18h"],
+    };
+    const bundle: AcougueData = { shop, items: [], reservations: [] };
+    data.accounts.push({
+      id: `acc_${randomUUID()}`,
+      email,
+      ownerName,
+      passwordHash: passwordRecord.hash,
+      passwordSalt: passwordRecord.salt,
+      shopId,
+      createdAt: new Date().toISOString(),
+    });
+    data.shops.push(bundle);
+    await writeData(data);
+    const account = data.accounts[data.accounts.length - 1];
+    return { accountId: account.id, shopId, shop };
+  });
+}
+
+export async function loginAccount(emailInput: string, password: string) {
+  return withLock(async () => {
+    const data = await readData();
+    const email = clean(emailInput ?? "", 120).toLowerCase();
+    const account = data.accounts.find((entry) => entry.email === email);
+    const shop = account ? data.shops.find((entry) => entry.shop.id === account.shopId) : undefined;
+    if (!account || !shop || !verifyPassword(password ?? "", account.passwordHash, account.passwordSalt)) {
+      throw new StoreError("E-mail ou senha não conferem.", 401);
+    }
+    return { accountId: account.id, shopId: account.shopId, shop: shop.shop };
+  });
+}
+
+export async function resetShop(shopId: string) {
+  return withLock(async () => {
+    const data = await readData();
+    const current = findShop(data, shopId);
+    if (current.shop.slug !== "estrela") {
+      throw new StoreError("A restauração vale só para a loja de demonstração.");
+    }
+    const seed = createSeed();
+    const index = data.shops.findIndex((entry) => entry.shop.id === shopId);
+    data.shops[index] = {
+      ...seed,
+      shop: { ...seed.shop, id: current.shop.id, slug: current.shop.slug },
+    };
+    await writeData(data);
+    return data.shops[index];
+  });
+}
+
+export async function saveShop(shopId: string, input: Shop) {
+  return withLock(async () => {
+    const data = await readData();
+    const current = findShop(data, shopId);
     const slots = (input.slots ?? [])
       .map((slot) => clean(slot, 40))
       .filter(Boolean)
       .slice(0, 8);
     if (slots.length === 0) throw new StoreError("Informe pelo menos um horário de retirada.");
     const name = requireText(input.name ?? "", "O nome do açougue", 2, 80);
-    const whatsapp = clean(input.whatsapp ?? "", 30);
-    data.shop = {
+    current.shop = {
+      ...current.shop,
       name,
       tagline: clean(input.tagline ?? "", 140),
       address: clean(input.address ?? "", 120),
       city: clean(input.city ?? "", 80),
       phone: clean(input.phone ?? "", 30),
-      whatsapp,
+      whatsapp: clean(input.whatsapp ?? "", 30),
       hours: cleanBlock(input.hours ?? "", 240),
       pickupNote: cleanBlock(input.pickupNote ?? "", 400),
       slots,
+      logoUrl: safeMediaUrl(input.logoUrl, shopId),
     };
     await writeData(data);
-    return data;
+    return current;
   });
 }
 
-export async function saveItem(input: CatalogInput) {
+export async function saveItem(shopId: string, input: CatalogInput) {
   return withLock(async () => {
     const data = await readData();
+    const current = findShop(data, shopId);
     const name = requireText(input.name ?? "", "O nome", 2, 80);
     const priceCents = Math.round(Number(input.priceCents));
     if (!Number.isInteger(priceCents) || priceCents < 0 || priceCents > 100_000_00) {
@@ -228,24 +468,27 @@ export async function saveItem(input: CatalogInput) {
       active: Boolean(input.active),
       promo: Boolean(input.promo),
       dailyCap,
+      photoUrl: safeMediaUrl(input.photoUrl, shopId),
     };
     if (input.id) {
-      const index = data.items.findIndex((item) => item.id === input.id);
+      const index = current.items.findIndex((item) => item.id === input.id);
       if (index === -1) throw new StoreError("Item não encontrado.", 404);
-      data.items[index] = { ...data.items[index], ...next };
+      current.items[index] = { ...current.items[index], ...next };
     } else {
-      const sort = data.items.reduce((max, item) => Math.max(max, item.sort), 0) + 1;
-      data.items.push({ id: randomUUID(), sort, ...next });
+      const sort = current.items.reduce((max, item) => Math.max(max, item.sort), 0) + 1;
+      current.items.push({ id: randomUUID(), sort, ...next });
     }
-    data.items.sort((a, b) => a.sort - b.sort);
+    current.items.sort((a, b) => a.sort - b.sort);
     await writeData(data);
-    return data;
+    return current;
   });
 }
 
 export async function createReservation(input: ReservationInput) {
   return withLock(async () => {
-    const data = await readData();
+    const database = await readData();
+    const slug = clean(input.slug ?? "", 60).toLowerCase();
+    const data = findShopBySlug(database, slug);
     const customerName = requireText(input.customerName ?? "", "O seu nome", 2, 80);
     const phone = clean(input.phone ?? "", 30);
     if (phone.replace(/\D/g, "").length < 10) {
@@ -314,21 +557,22 @@ export async function createReservation(input: ReservationInput) {
       createdAt: new Date().toISOString(),
     };
     data.reservations.unshift(reservation);
-    await writeData(data);
-    return { data, reservation };
+    await writeData(database);
+    return { reservation, shop: data.shop };
   });
 }
 
 const STATUS_FLOW: ReservationStatus[] = ["reservada", "separada", "pronta", "retirada", "cancelada"];
 
-export async function setReservationStatus(id: string, status: ReservationStatus) {
+export async function setReservationStatus(shopId: string, id: string, status: ReservationStatus) {
   return withLock(async () => {
     if (!STATUS_FLOW.includes(status)) throw new StoreError("Situação inválida.");
     const data = await readData();
-    const reservation = data.reservations.find((item) => item.id === id);
+    const current = findShop(data, shopId);
+    const reservation = current.reservations.find((item) => item.id === id);
     if (!reservation) throw new StoreError("Reserva não encontrada.", 404);
     reservation.status = status;
     await writeData(data);
-    return data;
+    return current;
   });
 }

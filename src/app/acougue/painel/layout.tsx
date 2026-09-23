@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { AcougueProvider } from "@/components/acougue/AcougueProvider";
 import { PainelFrame } from "@/components/acougue/PainelFrame";
-import { getAcougue } from "@/lib/acougue/store";
+import { readSession } from "@/lib/acougue/auth";
+import { getShop, StoreError } from "@/lib/acougue/store";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,15 @@ export const metadata: Metadata = {
 };
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
-  const data = await getAcougue();
+  const session = await readSession();
+  if (!session) redirect("/acougue/entrar");
+  let data;
+  try {
+    data = await getShop(session.shopId);
+  } catch (error) {
+    if (error instanceof StoreError && error.status === 404) redirect("/acougue/entrar");
+    throw error;
+  }
   return (
     <AcougueProvider initial={data}>
       <PainelFrame>{children}</PainelFrame>

@@ -16,6 +16,7 @@ import {
 } from "@/lib/acougue/present";
 import type { CatalogItem, PublicCatalog } from "@/lib/acougue/types";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/proposta/ui";
+import { ShopImage } from "./ShopImage";
 
 export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
   const router = useRouter();
@@ -32,6 +33,7 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
 
   const kits = catalog.items.filter((item) => item.kind === "kit");
   const cortes = catalog.items.filter((item) => item.kind === "corte");
+  const demo = catalog.shop.slug === "estrela";
 
   const lines = useMemo(() => {
     return catalog.items
@@ -76,12 +78,13 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
           pickupDate: date,
           slot,
           notes,
+          slug: catalog.shop.slug,
           items: lines.map((line) => ({ itemId: line.item.id, quantity: line.quantity })),
         }),
       });
       const body = (await response.json()) as { code?: string; error?: string };
       if (!response.ok || !body.code) throw new Error(body.error || "Não foi possível reservar.");
-      router.push(`/acougue/r/${body.code}`);
+      router.push(`/acougue/${catalog.shop.slug}/r/${body.code}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível reservar.");
       setBusy(false);
@@ -90,28 +93,44 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
 
   return (
     <div className="min-h-screen bg-surface">
-      <div className="border-b border-accent/20 bg-accent/10">
-        <p className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm text-ink-soft md:px-8">
-          <span>Demonstração compartilhada do Açougue Estrela. O pedido aparece no painel de preparo.</span>
-          <Link href="/acougue/painel" className="font-medium text-accent hover:text-accent-bright">
-            Abrir o painel do açougue
-          </Link>
-        </p>
-      </div>
+      {demo ? (
+        <div className="border-b border-accent/20 bg-accent/10">
+          <p className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm text-ink-soft md:px-8">
+            <span>Demonstração do Açougue Estrela. O cliente reserva sem criar conta.</span>
+            <span className="flex flex-wrap gap-4">
+              <Link href="/acougue/entrar" className="font-medium text-accent hover:text-accent-bright">
+                Entrar no painel
+              </Link>
+              <Link href="/acougue/criar" className="font-medium text-accent hover:text-accent-bright">
+                Quero isto no meu açougue
+              </Link>
+            </span>
+          </p>
+        </div>
+      ) : null}
 
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-6 px-4 py-8 md:px-8">
-          <div>
+          <div className="flex items-center gap-4">
+            {catalog.shop.logoUrl ? (
+              <ShopImage src={catalog.shop.logoUrl} alt="" className="h-16 w-16 rounded-md object-cover" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-md bg-accent/10 font-display text-2xl font-semibold text-accent">
+                {catalog.shop.name.slice(0, 1)}
+              </div>
+            )}
+            <div>
             <p className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-accent">
               Reserva e retirada
             </p>
             <h1 className="mt-2 font-display text-4xl tracking-tight text-ink">{catalog.shop.name}</h1>
             <p className="mt-2 max-w-xl text-muted">{catalog.shop.tagline}</p>
+            </div>
           </div>
           <div className="text-sm leading-relaxed text-ink-soft">
-            <p>{catalog.shop.address}</p>
-            <p>{catalog.shop.city}</p>
-            <p className="mt-1">{catalog.shop.hours}</p>
+            {catalog.shop.address ? <p>{catalog.shop.address}</p> : null}
+            {catalog.shop.city ? <p>{catalog.shop.city}</p> : null}
+            {catalog.shop.hours ? <p className="mt-1">{catalog.shop.hours}</p> : null}
           </div>
         </div>
       </header>
@@ -136,6 +155,9 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
             </div>
           </div>
 
+          {catalog.items.length === 0 ? (
+            <p className="mt-10 text-muted">Este açougue ainda está montando o cardápio.</p>
+          ) : null}
           <CatalogGroup title="Kits da promoção" items={kits} cart={cart} date={date} booked={catalog.booked} onChange={changeQty} />
           <CatalogGroup title="Cortes por quilo" items={cortes} cart={cart} date={date} booked={catalog.booked} onChange={changeQty} />
         </div>
@@ -220,9 +242,11 @@ export function Vitrine({ catalog }: { catalog: PublicCatalog }) {
           </button>
           <p className="mt-3 text-xs leading-relaxed text-muted">{catalog.shop.pickupNote}</p>
           <p className="mt-4 text-xs text-muted">O pagamento continua no balcão, na retirada.</p>
-          <Link href="/?interesse=acougue#contato" className={`${secondaryButtonClass} mt-4 w-full`}>
-            Quero isto no meu açougue
-          </Link>
+          {demo ? (
+            <Link href="/acougue/criar" className={`${secondaryButtonClass} mt-4 w-full`}>
+              Quero isto no meu açougue
+            </Link>
+          ) : null}
         </form>
       </div>
     </div>
@@ -256,6 +280,18 @@ function CatalogGroup({
           const soldOut = left != null && left <= 0;
           return (
             <li key={item.id} className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 gap-4">
+                {item.photoUrl ? (
+                  <ShopImage
+                    src={item.photoUrl}
+                    alt={item.name}
+                    className="h-24 w-24 shrink-0 rounded-md object-cover sm:h-28 sm:w-28"
+                  />
+                ) : (
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-md bg-surface font-display text-2xl text-ink-soft sm:h-28 sm:w-28">
+                    {item.name.slice(0, 1)}
+                  </div>
+                )}
               <div className="max-w-xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-display text-lg font-semibold text-ink">{item.name}</h3>
@@ -272,6 +308,7 @@ function CatalogGroup({
                   {item.serves ? ` · ${item.serves}` : ""}
                   {left != null ? ` · ${soldOut ? "esgotado neste dia" : `restam ${formatQty(left, item.unit)}`}` : ""}
                 </p>
+              </div>
               </div>
               <div className="flex items-center gap-3">
                 <button

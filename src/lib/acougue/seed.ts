@@ -1,5 +1,9 @@
 import { addCalendarDays, saoPauloToday, timestampOn } from "@/lib/proposta/dates";
-import type { AcougueData, Reservation } from "./types";
+import { hashPassword } from "./auth";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./demo";
+import type { AcougueData, Database, Reservation } from "./types";
+
+export { DEMO_EMAIL, DEMO_PASSWORD };
 
 function reservation(
   partial: Omit<Reservation, "createdAt"> & { createdAt?: string },
@@ -14,6 +18,9 @@ export function createSeed(now = new Date()): AcougueData {
 
   return {
     shop: {
+      id: "shop_estrela",
+      slug: "estrela",
+      logoUrl: "/acougue/estrela-logo.png",
       name: "Açougue Estrela",
       tagline: "Promoção com reserva e retirada no balcão",
       address: "Rua das Pitangueiras, 240",
@@ -28,6 +35,7 @@ export function createSeed(now = new Date()): AcougueData {
     items: [
       {
         id: "kit_churrasco",
+        photoUrl: "/acougue/kit-churrasco.png",
         kind: "kit",
         name: "Kit churrasco família",
         description: "Picanha 1 kg, linguiça toscana 800 g, sobrecoxa 1 kg e pão de alho.",
@@ -42,6 +50,7 @@ export function createSeed(now = new Date()): AcougueData {
       },
       {
         id: "kit_feijoada",
+        photoUrl: "/acougue/kit-feijoada.png",
         kind: "kit",
         name: "Kit feijoada",
         description: "Costela, linguiça, carne seca e lombo, porção para a panela.",
@@ -56,6 +65,7 @@ export function createSeed(now = new Date()): AcougueData {
       },
       {
         id: "kit_costela",
+        photoUrl: "/acougue/kit-costela.png",
         kind: "kit",
         name: "Kit costela",
         description: "Costela em tira, cerca de 2,5 kg, pronta para o bafo ou a brasa.",
@@ -70,6 +80,7 @@ export function createSeed(now = new Date()): AcougueData {
       },
       {
         id: "corte_picanha",
+        photoUrl: "/acougue/corte-picanha.png",
         kind: "corte",
         name: "Picanha",
         description: "Peça para churrasco. A reserva é em quilos.",
@@ -84,6 +95,7 @@ export function createSeed(now = new Date()): AcougueData {
       },
       {
         id: "corte_cupim",
+        photoUrl: "/acougue/corte-cupim.png",
         kind: "corte",
         name: "Cupim",
         description: "Peça para assar inteira.",
@@ -98,6 +110,7 @@ export function createSeed(now = new Date()): AcougueData {
       },
       {
         id: "corte_linguica",
+        photoUrl: "/acougue/corte-linguica.png",
         kind: "corte",
         name: "Linguiça toscana",
         description: "Para a brasa. Reserva em quilos.",
@@ -112,6 +125,7 @@ export function createSeed(now = new Date()): AcougueData {
       },
       {
         id: "corte_moida",
+        photoUrl: "/acougue/corte-moida.png",
         kind: "corte",
         name: "Carne moída",
         description: "Acém moído na hora, no dia da retirada.",
@@ -358,5 +372,24 @@ export function createSeed(now = new Date()): AcougueData {
         today,
       ),
     ],
+  };
+}
+
+export function createDatabase(now = new Date()): Database {
+  const shop = createSeed(now);
+  const password = hashPassword(DEMO_PASSWORD);
+  return {
+    accounts: [
+      {
+        id: "acc_estrela",
+        email: DEMO_EMAIL,
+        ownerName: "Açougue Estrela",
+        passwordHash: password.hash,
+        passwordSalt: password.salt,
+        shopId: shop.shop.id,
+        createdAt: timestampOn(saoPauloToday(now), 8),
+      },
+    ],
+    shops: [shop],
   };
 }

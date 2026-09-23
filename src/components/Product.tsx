@@ -28,16 +28,16 @@ export function Product() {
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
-                href="/acougue"
+                href="/acougue/estrela"
                 className="rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-bright"
               >
                 Ver a vitrine
               </Link>
               <Link
-                href="/acougue/painel"
+                href="/acougue/entrar"
                 className="rounded-md border border-line bg-surface px-6 py-3 text-sm font-medium text-ink-soft transition-colors hover:border-accent hover:text-accent"
               >
-                Abrir o painel
+                Entrar no painel
               </Link>
             </div>
             <p className="mt-6 text-sm text-muted">
@@ -50,8 +50,8 @@ export function Product() {
           </div>
           <ul className="divide-y divide-line border-y border-line">
             {[
-              ["Vitrine", "Kits em promoção e cortes por quilo, com o que ainda cabe no dia."],
-              ["Reserva", "Nome, WhatsApp e horário de retirada. O cliente leva um código."],
+              ["Vitrine", "Foto de cada kit, logo do açougue e o que ainda cabe no dia."],
+              ["Reserva", "O cliente abre o link, sem conta. Nome, WhatsApp e horário. Ele leva um código."],
               ["Preparo", "A soma do dia: quantos kits montar, quantos quilos cortar e quem busca em cada horário."],
             ].map(([title, text]) => (
               <li key={title} className="py-5">

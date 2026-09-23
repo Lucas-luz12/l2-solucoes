@@ -1,6 +1,7 @@
+import { readSession } from "@/lib/acougue/auth";
 import {
-  getAcougue,
-  resetAcougue,
+  getShop,
+  resetShop,
   saveItem,
   saveShop,
   setReservationStatus,
@@ -19,9 +20,15 @@ function fail(error: unknown) {
   return Response.json({ error: "Não foi possível concluir agora." }, { status: 500 });
 }
 
+async function sessionShop() {
+  const session = await readSession();
+  if (!session) throw new StoreError("Entre na conta do açougue.", 401);
+  return session.shopId;
+}
+
 export async function GET() {
   try {
-    return Response.json({ data: await getAcougue() });
+    return Response.json({ data: await getShop(await sessionShop()) });
   } catch (error) {
     return fail(error);
   }
@@ -44,23 +51,24 @@ export async function POST(request: Request) {
   }
 
   try {
+    const shopId = await sessionShop();
     switch (body.action) {
       case "save-shop": {
         if (!body.shop) return Response.json({ error: "Dados da loja ausentes." }, { status: 400 });
-        return Response.json({ data: await saveShop(body.shop) });
+        return Response.json({ data: await saveShop(shopId, body.shop) });
       }
       case "save-item": {
         if (!body.item) return Response.json({ error: "Dados do item ausentes." }, { status: 400 });
-        return Response.json({ data: await saveItem(body.item) });
+        return Response.json({ data: await saveItem(shopId, body.item) });
       }
       case "set-status": {
         if (!body.id || !body.status) {
           return Response.json({ error: "Reserva ausente." }, { status: 400 });
         }
-        return Response.json({ data: await setReservationStatus(body.id, body.status) });
+        return Response.json({ data: await setReservationStatus(shopId, body.id, body.status) });
       }
       case "reset":
-        return Response.json({ data: await resetAcougue() });
+        return Response.json({ data: await resetShop(shopId) });
       default:
         return Response.json({ error: "Ação desconhecida." }, { status: 400 });
     }

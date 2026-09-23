@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import type { Shop } from "@/lib/acougue/types";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/proposta/ui";
 import { useAcougue } from "./AcougueProvider";
+import { ShopImage } from "./ShopImage";
+import { uploadShopImage } from "./upload";
 
 export function ShopSettings() {
   const { data, saveShop, resetDemo } = useAcougue();
@@ -11,6 +13,7 @@ export function ShopSettings() {
   const [slots, setSlots] = useState(data.shop.slots.join("\n"));
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const demo = data.shop.slug === "estrela";
 
   function update(patch: Partial<Shop>) {
     setShop((current) => ({ ...current, ...patch }));
@@ -54,6 +57,50 @@ export function ShopSettings() {
         Um horário por linha. A reserva só aceita estes intervalos de retirada.
       </p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-ink-soft">Logo</p>
+          <div className="mt-2 flex items-center gap-4">
+            {shop.logoUrl ? (
+              <ShopImage src={shop.logoUrl} alt="" className="h-16 w-16 rounded-md object-cover" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-md bg-accent/10 font-display text-xl font-semibold text-accent">
+                {shop.name.slice(0, 1) || "A"}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <label className={`${secondaryButtonClass} cursor-pointer`}>
+                Enviar logo
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    setBusy(true);
+                    setMessage(null);
+                    try {
+                      const logoUrl = await uploadShopImage(file);
+                      update({ logoUrl });
+                      setMessage("Logo pronto. Salve a loja para publicar na vitrine.");
+                    } catch (reason) {
+                      setMessage(reason instanceof Error ? reason.message : "Não foi possível enviar o logo.");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
+              </label>
+              {shop.logoUrl ? (
+                <button type="button" className={secondaryButtonClass} onClick={() => update({ logoUrl: null })}>
+                  Remover
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted">JPG, PNG ou WebP, até 2,5 MB.</p>
+        </div>
         <label className="block text-sm font-medium text-ink-soft">
           Nome
           <input required value={shop.name} onChange={(event) => update({ name: event.target.value })} className={`${fieldClass} mt-1.5`} />
@@ -95,9 +142,11 @@ export function ShopSettings() {
           <button type="submit" className={primaryButtonClass} disabled={busy}>
             Salvar loja
           </button>
-          <button type="button" className={secondaryButtonClass} disabled={busy} onClick={onReset}>
-            Restaurar demonstração
-          </button>
+          {demo ? (
+            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={onReset}>
+              Restaurar demonstração
+            </button>
+          ) : null}
         </div>
       </form>
     </div>
